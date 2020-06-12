@@ -1,0 +1,19 @@
+{
+  "name": "airtable",
+  "version": "1.0.0",
+  "description": "",
+  "main": "main.js",
+  "dependencies": {
+    "airtable": "^0.8.1",
+    "dotenv": "^8.2.0",
+    "rcon-client": "^4.2.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "run": "main.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
