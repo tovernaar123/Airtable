@@ -6,7 +6,8 @@
   "dependencies": {
     "airtable": "^0.8.1",
     "dotenv": "^8.2.0",
-    "rcon-client": "^4.2.0"
+    "rcon-client": "^4.2.0",
+    "rfdc": "^1.1.4"
   },
   "devDependencies": {},
   "scripts": {

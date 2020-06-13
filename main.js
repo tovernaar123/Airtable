@@ -5,6 +5,12 @@ const key  = variables.Api_key
 const host = variables.Host
 const rcon_pass= variables.Rcon_pass
 const data_path = resolveToAbsolutePath(variables.Path);
+const clone = require('rfdc')()
+const airtable = require(__dirname + "\\airtable_object.js")
+var Airtable = require('airtable');
+global.base = new Airtable({apiKey: key}).base(variables.Base_key);
+airtable.get_player_id("Drahc_pro")
+var game_internals = base('Game Internals')
 
 Rcon = require("rcon-client").Rcon
 async function connect_rcon(){
@@ -15,6 +21,7 @@ async function connect_rcon(){
 
 const fs = require('fs');
 const readline = require('readline');
+const { stringify } = require('querystring')
 function resolveToAbsolutePath(path) {
     return path.replace(/%([^%]+)%/g, function(_, key) {
         return process.env[key];
@@ -30,38 +37,23 @@ fs.watch(data_path, (event, filename) => {
     fsWait = setTimeout(() => {
       fsWait = false;
     }, 100);
-    console.log(filename)
-    readfile(filename)
-    rcon.send("file read")
+    var data = readfile(filename)
+    run_data(data)
   }
 });;
 
 function readfile(filename){
     try {
-        var data = fs.readFileSync(data_path + "\\"+filename, 'utf8');
-        console.log(data);    
+        var data = fs.readFileSync(data_path + "\\"+filename, 'utf8');   
+        return data
     } catch(e) {
-        console.log('Error:', e.stack);
+        return 'Error:' + e.stack
     }
+
 }
-
-var Airtable = require('airtable');
-var base = new Airtable({apiKey: key}).base(variables.Base_key);
-var game_internals = base('Game Internals')
-base('Scoring Data').select({
-    // Selecting the first 3 records in Public Facing Event List:
-    maxRecords: 15,
-    //view: "Public Facing Event List"
-}).eachPage(function page(records, fetchNextPage) {
-    // This function (`page`) will get called for each page of records.
-
-    records.forEach(function(record) {
-        var id = record.get('Gold Data')
-        console.log('Retrieved',id);
-    });
-
-    fetchNextPage();
-
-}, function done(err) {
-    if (err) { console.error(err); return; }
-});
+function run_data(data){
+    var object = JSON.parse(data)
+    console.log(object.type) 
+    var json = clone(require(__dirname + "\\score_template.json"));
+    json[0].fields["Bronze Data"] = 1
+}
