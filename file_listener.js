@@ -47,17 +47,6 @@ function readfile(filename,path){
     }
 
 }
-function get_date(){
-    let date_ob = new Date();
-    let date = ("0" + date_ob.getDate()).slice(-2);
-    let month = ("0" + (date_ob.getMonth() + 1)).slice(-2);
-    let year = date_ob.getFullYear();
-    let hours = date_ob.getHours();
-    let minutes = date_ob.getMinutes();
-    let seconds = date_ob.getSeconds();
-    const event = new Date(year + "-" + month + "-" + date + " " + hours + ":" + minutes + ":" + seconds);
-    return event.toISOString();
-}
 
 
 async function run_data(data){
@@ -70,7 +59,7 @@ async function run_data(data){
                 player_ids.push( await airtable.get_player_id(player))
             }
             json[0].fields["Players Present"] = player_ids
-            json[0].fields["Time Started"] =  get_date()
+            json[0].fields["Time Started"] =  new Date().toISOString();
             json[0].fields["Game"][0] =  await airtable.get_game_id(object.name)
             console.log("game starting with ")
             console.log(json)
@@ -82,7 +71,7 @@ async function run_data(data){
         break
 
         case "end_game":
-            var current_timeDate = new Date(get_date())
+            var current_timeDate = new Date()
             var json = clone(require("./score_update_template.json"));
             var players
             json[0].id = airtable_id
