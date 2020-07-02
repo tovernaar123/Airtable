@@ -1,3 +1,4 @@
+"use strict";
 var result = require('dotenv').config()
 var variables = result.parsed
 

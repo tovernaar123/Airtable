@@ -1,3 +1,4 @@
+"use strict";
 var player_chace = {}
 var game_chace = {}
 exports.get_player_id = async function(name) {
