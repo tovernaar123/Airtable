@@ -100,7 +100,7 @@ async function run_data(data){
                 delete json[0].fields["Bronze Player"]
                 delete json[0].fields["Bronze Data"]
             }
-            var begin_time = await airtable.gernal_look_up("Scoring Data","Match ID",id,"Time Started")
+            var begin_time = await airtable.general_look_up("Scoring Data", "Match ID", id, "Time Started");
             begin_time = new Date(begin_time)
             var difernce = (current_timeDate-begin_time)/1000*60
             json[0].fields["Duration"] = difernce
