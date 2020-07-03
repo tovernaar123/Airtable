@@ -1,13 +1,12 @@
-
 var result = require('dotenv').config()
 var variables = result.parsed
-global.key  = variables.Api_key
-servers =  JSON.parse((variables.Servers))
+global.key = variables.Api_key
+servers = JSON.parse((variables.Servers))
 global.servers = servers
 require(__dirname + "\\file_listener.js")
 
 Rcon = require("rcon-client").Rcon
-async function connect_rcon(port,pw){
+async function connect_rcon(port, pw) {
     const rcon = new Rcon({ host: "localhost", port: port, password: pw })
     await rcon.connect()
     return rcon
@@ -25,20 +24,20 @@ const jwt = require("jsonwebtoken");
 const WebSocket = require("ws");
 var sockets = {}
 var server;
-if(variables.Is_lobby === "true"){
+if (variables.Is_lobby === "true") {
     console.log("running as server")
     var config;
     var secret;
     const wss = new WebSocket.Server({ noServer: true });
     wss.on("connection", function(ws, request) {
         console.log(`Received connection from ${request.socket.remoteAddress}`);
-        ws.send(JSON.stringify({"type": "connected"}));
+        ws.send(JSON.stringify({ "type": "connected" }));
         ws.on("message", function(msg) {
             let data = JSON.parse(msg);
-            if(data.id != undefined){
+            if (data.id != undefined) {
                 sockets[data.id] = ws
-            }else{
-                if(data.type === "end_game"){
+            } else {
+                if (data.type === "end_game") {
                     print_who_won(data["data"].object)
                 }
             }
@@ -92,7 +91,7 @@ if(variables.Is_lobby === "true"){
 
         await new Promise((resolve, reject) => {
             server.on("error", reject);
-            server.listen(variables.port,"0.0.0.0", () => {
+            server.listen(variables.port, "0.0.0.0", () => {
                 server.off("error", reject);
                 console.log(`listening on ${variables.port}`);
                 resolve();
@@ -106,7 +105,7 @@ if(variables.Is_lobby === "true"){
             process.exitCode = 1;
         });
     }
-}else{
+} else {
     var reconnecting = false
     var interval_token
     async function client() {
@@ -134,18 +133,18 @@ if(variables.Is_lobby === "true"){
             ondata(msg)
         });
         ws.on("error", function(error) {
-            if(reconnecting){
-                console.log("cant reconnect try again in 10 sec")  
-            }else{
+            if (reconnecting) {
+                console.log("cant reconnect try again in 10 sec")
+            } else {
                 console.error(error)
             }
         })
         ws.on("close", function() {
             console.log("Connection lost");
-            if(!reconnecting){
-                interval_token = setInterval(function(){
+            if (!reconnecting) {
+                interval_token = setInterval(function() {
                     client()
-                },10000)
+                }, 10000)
             }
             reconnecting = true
         });
@@ -159,69 +158,104 @@ if(variables.Is_lobby === "true"){
         });
     }
 }
-async function ondata(msg){
+async function ondata(msg) {
     let data = JSON.parse(msg);
-    if(data.type === "start"){
+    if (data.type === "start") {
         var args = data.args
         args = args.join(' ')
         const server_object = servers.local_servers[data.sever]
-        var rcon2 = await connect_rcon(server_object.Rcon_port,server_object.Rcon_pass)
+        var rcon2 = await connect_rcon(server_object.Rcon_port, server_object.Rcon_pass)
         setTimeout(async function() {
             await rcon2.send("/start " + args)
             rcon2.end()
-        },10000)
+        }, 10000)
         global.airtable_id = data.id
-    }else{
-        if(data.type === "connected"){console.log("Connected to server."); return}
-        console.log("Unkown type " + data.type )
+    } else {
+        if (data.type === "connected") { console.log("Connected to server."); return }
+        console.log("Unkown type " + data.type)
     }
 }
 
+async function do_init() {
+    var object_for_lua = {}
+    for (variable in servers["local_servers"]) {
+        const object = servers["local_servers"][variable]
+        const rcon = await connect_rcon(object.Rcon_port, object.Rcon_pass)
 
-global.tell_server = async function(args,server,id){    
-    if(servers["local_servers"][server] != undefined){
+        const is_lobby = object.is_lobby
+        const ip = variable
+        await rcon.send(`/interface mini_games.is_lobby = ${is_lobby}`)
+        await rcon.send(`/interface mini_games.server_adress ="${ip}"`)
+        if (is_lobby) {
+            console.log(`${variable} is the lobby. `)
+            object_for_lua['lobby'] = variable
+            await rcon.end()
+            continue
+        }
+        var result = await rcon.send('/interface local result = {} for i , surface in pairs(game.surfaces) do result[surface.name] = true end return game.table_to_json(result)')
+        var result2 = await rcon.send('/interface local result = {} for name,mini_game in pairs(mini_games.mini_games)do result[mini_game.map] = name end return game.table_to_json(result)')
+        var result = result.split('\n')[0]
+        const json1 = JSON.parse(result)
+        var result = result2.split('\n')[0]
+        const json2 = JSON.parse(result)
+        var games = []
+        for (name in json2) {
+            if (json1[name] != undefined) {
+                var internal_name = json2[name]
+                if (object_for_lua[internal_name] == undefined) { object_for_lua[internal_name] = [] }
+                object_for_lua[internal_name].push(variable)
+                games.push(internal_name)
+            }
+        }
+        games = games.join(' and ')
+        console.log(`${variable} is running ${games}. `)
+    }
+    console.log(object_for_lua)
+}
+do_init()
+
+global.tell_server = async function(args, server, id) {
+    if (servers["local_servers"][server] != undefined) {
+        console.log('bad')
         args = args.join(' ')
         const server_object = servers.local_servers[server]
-        var rcon2 = await connect_rcon(server_object.Rcon_port,server_object.Rcon_pass)
+        var rcon2 = await connect_rcon(server_object.Rcon_port, server_object.Rcon_pass)
         setTimeout(async function() {
             await rcon2.send("/start " + args)
             rcon2.end()
-        },10000)
-    }else{
-        if(!variables.Is_lobby){console.error("Server start must be on lobby"); return }
+        }, 10000)
+    } else {
+        if (!variables.Is_lobby) { console.error("Server start must be on lobby"); return }
         const str_key = servers["remote_servers"][server]
-        if(sockets[str_key] === undefined){console.error("cant find server"); return}
-        sockets[str_key].send(JSON.stringify({"type":"start", "args":args, "sever":server,"id":id}));
+        if (sockets[str_key] === undefined) { console.error("cant find server"); return }
+        sockets[str_key].send(JSON.stringify({ "type": "start", "args": args, "sever": server, "id": id }));
     }
-    
+
 }
-async function print_who_won(object){
+async function print_who_won(object) {
     setTimeout(async function() {
         const server_object2 = servers.lobby
-        var rcon2 = await connect_rcon(server_object2.Rcon_port,server_object2.Rcon_pass)
-        var rcon2 = await connect_rcon(server_object2.Rcon_port,server_object2.Rcon_pass)
-        await rcon2.send("/sc game.print( \"[color=#FFD700]1st: " + object.Gold+" with a score of " + object.Gold_data +".[/color]\")")
+        var rcon2 = await connect_rcon(server_object2.Rcon_port, server_object2.Rcon_pass)
+        var rcon2 = await connect_rcon(server_object2.Rcon_port, server_object2.Rcon_pass)
+        await rcon2.send("/sc game.print( \"[color=#FFD700]1st: " + object.Gold + " with a score of " + object.Gold_data + ".[/color]\")")
         if (object.Silver != undefined) {
-                await rcon2.send("/sc game.print( \"[color=#C0C0C0]2nd: " + object.Silver+" with a score of " + object.Silver_data +".[/color]\")")
-            if(object.Bronze != undefined){
-                await rcon2.send("/c game.print(\"[color=#cd7f32]3rd:" +object.Bronze+" with a score of" + object.Bronze_data +".[/color]\")")
+            await rcon2.send("/sc game.print( \"[color=#C0C0C0]2nd: " + object.Silver + " with a score of " + object.Silver_data + ".[/color]\")")
+            if (object.Bronze != undefined) {
+                await rcon2.send("/c game.print(\"[color=#cd7f32]3rd:" + object.Bronze + " with a score of" + object.Bronze_data + ".[/color]\")")
             }
         }
         rcon2.end()
-    },1000)
+    }, 1000)
 }
 
-global.send_players = async function(server,object){
+global.send_players = async function(server, object) {
     const server_object = servers.local_servers[server]
-    var rcon = await connect_rcon(server_object.Rcon_port,server_object.Rcon_pass)
+    var rcon = await connect_rcon(server_object.Rcon_port, server_object.Rcon_pass)
     await rcon.send("/stop_games")
     rcon.end()
-    if(variables.Is_lobby){
+    if (variables.Is_lobby) {
         print_who_won(object)
-    }else{
-        server.send(JSON.stringify({ "type": "end_game","data": object}));
+    } else {
+        server.send(JSON.stringify({ "type": "end_game", "data": object }));
     }
 }
-
-
-
