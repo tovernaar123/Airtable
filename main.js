@@ -4,7 +4,7 @@ var variables = result.parsed
 global.key  = variables.Api_key
 servers =  JSON.parse((variables.Servers))
 global.servers = servers
-require(__dirname + "\\file_listener.js")
+require("./file_listener.js")
 
 Rcon = require("rcon-client").Rcon
 async function connect_rcon(port,pw){
