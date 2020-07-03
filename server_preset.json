@@ -1,0 +1,23 @@
+{
+    "remote_servers": {
+        "127.0.0.1:7125": "expgaming"
+    },
+    "local_servers": {
+        "127.0.0.1:12345": {
+            "dir": "[path]",
+            "Rcon_pass": "S7i067ccm2QyCK#XXP$",
+            "Rcon_port": 4444,
+            "is_lobby": true
+        }
+    },
+    "lobby": {
+        "api_ip_port": "https://127.0.0.1:9090",
+        "Rcon_pass": "S7i067ccm2QyCK#XXP$",
+        "Rcon_port": 4444
+    },
+    "127.0.0.1:7125": {
+        "dir": "[path]",
+        "Rcon_pass": "S7i067ccm2QyCK#XXP$",
+        "Rcon_port": 4434
+    }
+}
