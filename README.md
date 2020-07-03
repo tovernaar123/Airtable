@@ -1,4 +1,4 @@
-# Airtable
+# secret and token
 How to get the secret and token 
 let secret = await util.promisify(crypto.randomBytes)(256);
 secret.toString("base64")
