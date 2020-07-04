@@ -1,8 +1,7 @@
 "use strict";
-var result = require('dotenv').config()
-var variables = result.parsed
-global.key = variables.Api_key
-global.servers = JSON.parse((variables.Servers))
+require('dotenv').config();
+
+global.servers = JSON.parse((process.env.Servers));
 require("./file_listener.js")
 
 const Rcon = require("rcon-client").Rcon
@@ -24,7 +23,7 @@ const jwt = require("jsonwebtoken");
 const WebSocket = require("ws");
 var sockets = {}
 var server;
-if (variables.Is_lobby === "true") {
+if (process.env.Is_lobby === "true") {
     console.log("running as server")
     var config;
     var secret;
@@ -97,10 +96,10 @@ if (variables.Is_lobby === "true") {
         //let bytes = await util.promisify(crypto.randomBytes)(256);
         //bytes.toString("base64")
         //token: jwt.sign({}, bytes)
-        secret = Buffer.from(variables.secret, "base64")
+        secret = Buffer.from(process.env.secret, "base64");
         let server = https.createServer({
-            key: await fs.readFile(variables.key),
-            cert: await fs.readFile(variables.cert),
+            key: await fs.readFile(process.env.key),
+            cert: await fs.readFile(process.env.cert),
         });
 
         server.on("upgrade", function(request, socket, head) {
@@ -117,9 +116,9 @@ if (variables.Is_lobby === "true") {
 
         await new Promise((resolve, reject) => {
             server.on("error", reject);
-            server.listen(variables.port, "0.0.0.0", () => {
+            server.listen(process.env.port, "0.0.0.0", () => {
                 server.off("error", reject);
-                console.log(`listening on ${variables.port}`);
+                console.log(`listening on ${process.env.port}`);
                 resolve();
             });
         });
@@ -135,20 +134,20 @@ if (variables.Is_lobby === "true") {
     var reconnecting = false
     var interval_token
     async function client() {
-        let cert = await fs.readFile(variables.cert);
+        let cert = await fs.readFile(process.env.cert);
 
         let options = {
-            headers: { "Authorization": variables.token },
+            headers: { "Authorization": process.env.token },
             port: 1
         }
         if (cert) {
             options.ca = cert;
         }
-        if (/(\d+\.){3}\d+/.test(new URL(variables.url).hostname)) {
+        if (/(\d+\.){3}\d+/.test(new URL(process.env.url).hostname)) {
             // Overzealous ws lib adds SNI for IP hosts.
             options.servername = "";
         }
-        let ws = new WebSocket(variables.url, options);
+        let ws = new WebSocket(process.env.url, options);
         ws.on("open", function() {
             ws.send(JSON.stringify({ "id": "expgaming" }));
             if (reconnecting) {
@@ -251,7 +250,7 @@ async function do_init() {
         games = games.join(' and ')
         console.log(`${variable} is running ${games}. `)
     }
-    if (variables.Is_lobby == 'true') {
+    if (process.env.Is_lobby == 'true') {
 
         var object = servers["lobby"]
         const rcon = await connect_rcon(object.Rcon_port, object.Rcon_pass)
@@ -285,7 +284,10 @@ global.tell_server = async function(args, server, id) {
             rcon2.end()
         }, 30000)
     } else {
-        if (!variables.Is_lobby) { console.error("Server start must be on lobby"); return }
+        if (!process.env.Is_lobby) {
+            console.error("Server start must be on lobby");
+            return;
+        }
         const str_key = servers["remote_servers"][server]
         if (sockets[str_key] === undefined) { console.error("cant find server"); return }
         sockets[str_key].send(JSON.stringify({ "type": "start", "args": args, "sever": server, "id": id }));
@@ -316,7 +318,7 @@ global.send_players = async function(server, object) {
         await rcon.send("/kill_all")
         await rcon.end()
     }, 5000)
-    if (variables.Is_lobby) {
+    if (process.env.Is_lobby) {
         print_who_won(object)
     } else {
         server.send(JSON.stringify({ "type": "end_game", "data": object }));
