@@ -1,9 +1,10 @@
+"use strict";
 var result = require('dotenv').config()
 var variables = result.parsed
 
 var Airtable = require('airtable');
-Rcon = require("rcon-client").Rcon
-const airtable = require(__dirname + "\\airtable_object.js")
+
+const airtable = require("./airtable_object.js")
 const clone = require('rfdc')()
 const directories = []
 for (let variable in servers["local_servers"]) {
@@ -50,30 +51,18 @@ function readfile(filename, path) {
 
 }
 
-function get_date() {
-    let date_ob = new Date();
-    let date = ("0" + date_ob.getDate()).slice(-2);
-    let month = ("0" + (date_ob.getMonth() + 1)).slice(-2);
-    let year = date_ob.getFullYear();
-    let hours = date_ob.getHours();
-    let minutes = date_ob.getMinutes();
-    let seconds = date_ob.getSeconds();
-    const event = new Date(year + "-" + month + "-" + date + " " + hours + ":" + minutes + ":" + seconds);
-    return event.toISOString();
-}
-
 
 async function run_data(data) {
     var object = JSON.parse(data)
     switch (object.type) {
         case "Started_game":
-            var json = clone(require(__dirname + "\\score_template.json"));
+            var json = clone(require("./score_template.json"));
             var player_ids = []
             for (let player of object.players) {
                 player_ids.push(await airtable.get_player_id(player))
             }
             json[0].fields["Players Present"] = player_ids
-            json[0].fields["Time Started"] = get_date()
+            json[0].fields["Time Started"] = new Date().toISOString();
             json[0].fields["Game"][0] = await airtable.get_game_id(object.name)
             console.log("game starting with ")
             console.log(json)
@@ -86,8 +75,8 @@ async function run_data(data) {
             break
 
         case "end_game":
-            var current_timeDate = new Date(get_date())
-            var json = clone(require(__dirname + "\\score_update_template.json"));
+            var current_timeDate = new Date()
+            var json = clone(require("./score_update_template.json"));
             var players
             json[0].id = airtable_id
             await Promise.all([airtable.get_player_id(object.Gold), airtable.get_player_id(object.Silver), airtable.get_player_id(object.Bronze)]).then((values) => {
