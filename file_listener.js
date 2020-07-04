@@ -6,7 +6,7 @@ Rcon = require("rcon-client").Rcon
 const airtable = require(__dirname + "\\airtable_object.js")
 const clone = require('rfdc')()
 const directories = []
-for (variable in servers["local_servers"]) {
+for (let variable in servers["local_servers"]) {
     const object = servers["local_servers"][variable]
     var dir = resolveToAbsolutePath(object.dir)
     console.log(`Watching for file changes on ${dir}`);
@@ -25,7 +25,7 @@ function resolveToAbsolutePath(path) {
 const fs = require('fs');
 
 let fsWait = false;
-for (path of directories) {
+for (var path of directories) {
     fs.watch(path, (event, filename) => {
         if (filename) {
             if (fsWait) return;
@@ -69,7 +69,7 @@ async function run_data(data) {
         case "Started_game":
             var json = clone(require(__dirname + "\\score_template.json"));
             var player_ids = []
-            for (player of object.players) {
+            for (let player of object.players) {
                 player_ids.push(await airtable.get_player_id(player))
             }
             json[0].fields["Players Present"] = player_ids
@@ -114,7 +114,7 @@ async function run_data(data) {
                 delete json[0].fields["Bronze Player"]
                 delete json[0].fields["Bronze Data"]
             }
-            var begin_time = await airtable.gernal_look_up("Scoring Data", "Match ID", id, "Time Started")
+            var begin_time = await airtable.gernal_look_up("Scoring Data", "Match ID", airtable_id, "Time Started")
             begin_time = new Date(begin_time)
             var difernce = (current_timeDate - begin_time) / 1000 * 60
             json[0].fields["Duration"] = difernce

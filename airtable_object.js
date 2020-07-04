@@ -1,50 +1,56 @@
 var player_chace = {}
 var game_chace = {}
 exports.get_player_id = async function(name) {
-    if(!player_chace[name]) {
+    if (!player_chace[name]) {
         const result = await get_player_id_promise(name)
         return result
-    } else{
+    } else {
         return player_chace[name]
     }
 }
-function get_player_id_promise(name){
-    const result = new Promise( (resolve,reject) => {
+
+function get_player_id_promise(name) {
+    const result = new Promise((resolve, reject) => {
         base('Player Data').select({
-            filterByFormula:"{Player Name} = '"+name+"'"
+            filterByFormula: "{Player Name} = '" + name + "'"
         }).eachPage(function page(records, fetchNextPage) {
-            records.forEach(function(record){
+            records.forEach(function(record) {
                 player_chace[name] = record.id
             })
             fetchNextPage();
-        },function done(err) {
-            if (err) { console.error(err); return reject(err)}
-            return resolve(player_chace[name]) ;
+        }, function done(err) {
+            if (err) { console.error(err); return reject(err) }
+            return resolve(player_chace[name]);
 
         })
     });
     return result
 }
 exports.get_game_id = async function(name) {
-    if(!game_chace[name]) {
+    if (!game_chace[name]) {
         const result = await get_game_id_promise(name)
         return result
-    } else{
+    } else {
         return game_chace[name]
     }
 }
-function get_game_id_promise(name){
-    const result = new Promise( (resolve,reject) => {
+
+function get_game_id_promise(name) {
+    const result = new Promise((resolve, reject) => {
         base('Game Internals').select({
-            filterByFormula:"{Name} = '"+name+"'"
+            filterByFormula: "{Name} = '" + name + "'"
         }).eachPage(function page(records, fetchNextPage) {
-            records.forEach(function(record){
+            records.forEach(function(record) {
                 game_chace[name] = record.id
             })
             fetchNextPage();
-        },function done(err) {
-            if (err) { console.error(err); return reject(err)}
-            return resolve(game_chace[name]) ;
+        }, function done(err) {
+            if (err) {
+                console.error(err);
+                console.log(name);
+                return reject(err)
+            }
+            return resolve(game_chace[name]);
 
         })
     });
@@ -57,32 +63,24 @@ function get_game_id_promise(name){
     @param {string} answer_colum - the colum you want the value of.
     @returns {any}  the value found.
  */
-exports.gernal_look_up = async function(table,colum_for_search,value,answer_colum) {
-    const result = await gernal_look_up_promise(table,colum_for_search,value,answer_colum)
+exports.gernal_look_up = async function(table, colum_for_search, value, answer_colum) {
+    const result = await gernal_look_up_promise(table, colum_for_search, value, answer_colum)
     return result
 }
-function gernal_look_up_promise(table,colum_for_search,value,answer_colum){
+
+function gernal_look_up_promise(table, colum_for_search, value, answer_colum) {
     var pre_result
-    const result = new Promise( (resolve,reject) => {
+    const result = new Promise((resolve, reject) => {
         base(table).select({
-            filterByFormula: "{"+colum_for_search+"} = " + "'" + value + "'"
+            filterByFormula: "{" + colum_for_search + "} = " + "'" + value + "'"
         }).eachPage(function page(record, fetchNextPage) {
             pre_result = record[0].fields[answer_colum]
             fetchNextPage();
-        },function done(err) {
-            if (err) { console.error(err); return reject(err)}
-            return resolve(pre_result) ;
+        }, function done(err) {
+            if (err) { console.error(err); return reject(err) }
+            return resolve(pre_result);
 
         })
     });
     return result
 }
-
-
-
-
-
-
-
-
-
