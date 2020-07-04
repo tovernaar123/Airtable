@@ -1,12 +1,11 @@
-
+"use strict";
 var result = require('dotenv').config()
 var variables = result.parsed
 global.key  = variables.Api_key
-servers =  JSON.parse((variables.Servers))
-global.servers = servers
+global.servers = JSON.parse((variables.Servers))
 require("./file_listener.js")
 
-Rcon = require("rcon-client").Rcon
+const Rcon = require("rcon-client").Rcon
 async function connect_rcon(port,pw){
     const rcon = new Rcon({ host: "localhost", port: port, password: pw })
     await rcon.connect()
