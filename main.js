@@ -285,7 +285,7 @@ global.tell_server = async function(args, server, id) {
             rcon2.end()
         }, 30000)
     } else {
-        if (!process.env.Is_lobby) {
+        if (process.env.Is_lobby != 'true') {
             console.error("Server start must be on lobby");
             return;
         }
@@ -319,7 +319,7 @@ global.send_players = async function(server, object) {
         await rcon.send("/kill_all")
         await rcon.end()
     }, 5000)
-    if (process.env.Is_lobby) {
+    if (process.env.Is_lobby == 'true') {
         print_who_won(object)
     } else {
         server.send(JSON.stringify({ "type": "end_game", "data": object }));
