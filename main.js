@@ -1,8 +1,9 @@
 "use strict";
 require('dotenv').config();
 
-global.servers = JSON.parse((process.env.Servers));
-require("./file_listener.js")
+const servers = JSON.parse((process.env.Servers));
+const file_listener = require("./file_listener.js")
+file_listener.watch_files(servers);
 
 const Rcon = require("rcon-client").Rcon
 async function connect_rcon(port, pw) {

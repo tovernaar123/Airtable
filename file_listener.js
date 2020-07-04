@@ -3,16 +3,10 @@ var Airtable = require('airtable');
 
 const airtable = require("./airtable_object.js")
 const clone = require('rfdc')()
-const directories = []
-for (let variable in servers["local_servers"]) {
-    const object = servers["local_servers"][variable]
-    var dir = resolveToAbsolutePath(object.dir)
-    console.log(`Watching for file changes on ${dir}`);
-    directories.push(dir)
-
-}
+const fs = require('fs');
 
 global.base = new Airtable({ apiKey: process.env.Api_key }).base(process.env.Base_key);
+
 
 function resolveToAbsolutePath(path) {
     return path.replace(/%([^%]+)%/g, function(_, key) {
@@ -20,21 +14,29 @@ function resolveToAbsolutePath(path) {
     });
 }
 
-const fs = require('fs');
+exports.watch_files = function(servers) {
+    const directories = []
+    for (let variable in servers["local_servers"]) {
+        const object = servers["local_servers"][variable]
+        var dir = resolveToAbsolutePath(object.dir)
+        console.log(`Watching for file changes on ${dir}`);
+        directories.push(dir)
+    }
 
-let fsWait = false;
-for (var path of directories) {
-    fs.watch(path, (event, filename) => {
-        if (filename) {
-            if (fsWait) return;
-            fsWait = setTimeout(() => {
-                fsWait = false;
-            }, 100);
-            var data = readfile(filename, path)
-            console.log(data)
-            run_data(data)
-        }
-    });;
+    let fsWait = false;
+    for (var path of directories) {
+        fs.watch(path, (event, filename) => {
+            if (filename) {
+                if (fsWait) return;
+                fsWait = setTimeout(() => {
+                    fsWait = false;
+                }, 100);
+                var data = readfile(filename, path)
+                console.log(data)
+                run_data(data)
+            }
+        });;
+    }
 }
 
 function readfile(filename, path) {
