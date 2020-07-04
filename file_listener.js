@@ -1,7 +1,4 @@
 "use strict";
-var result = require('dotenv').config()
-var variables = result.parsed
-
 var Airtable = require('airtable');
 
 const airtable = require("./airtable_object.js")
@@ -15,7 +12,7 @@ for (let variable in servers["local_servers"]) {
 
 }
 
-global.base = new Airtable({ apiKey: key }).base(variables.Base_key);
+global.base = new Airtable({ apiKey: process.env.Api_key }).base(process.env.Base_key);
 
 function resolveToAbsolutePath(path) {
     return path.replace(/%([^%]+)%/g, function(_, key) {
