@@ -47,7 +47,7 @@ exports.get_game_id = async function(base, name) {
     @param {string} answer_colum - the colum you want the value of.
     @returns {any}  the value found.
  */
-exports.general_look_up = async function(base, table, colum_for_search, value, answer_colum) {
+exports.general_lookup = async function(base, table, colum_for_search, value, answer_colum) {
     let records = base(table).select({
         filterByFormula: `{${colum_for_search}} = '${value}'`,
         maxRecords: 1,
