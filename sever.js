@@ -7,27 +7,19 @@ const https = require("https");
 
 const jwt = require("jsonwebtoken");
 const WebSocket = require("ws");
-exports.sockets = {}
+let sockets = {}
+exports.sockets = sockets
 var secret;
 let lobby_rcon
 let local_rcons
 
-//function called by main where lobby_rcon_ is the open rcon to the lobby and local_rcons_ is all the rcon connections including the lobby
-exports.init = async function(lobby_rcon_, local_rcons_) {
-    //setting file variables to the parms
-    lobby_rcon = lobby_rcon_
-    local_rcons = local_rcons_
-
-    //starting the server
-    start().catch(err => {
-        console.error(err);
-        process.exitCode = 1;
-    });
-
-    //server setup 
-    var object_for_lua
+//server setup 
+async function server_setup() {
+    var object_for_lua = {}
     for (let variable in servers["local_servers"]) {
-        const rcon = local_rcons_[variable]
+        //use await cause its still connecting
+        const rcon = local_rcons[variable]
+        const object = servers["local_servers"][variable]
         const is_lobby = object.is_lobby
         const ip = variable
 
@@ -73,11 +65,10 @@ exports.init = async function(lobby_rcon_, local_rcons_) {
     }
 
     //return all running servers
-    const result = await lobby_rcon.send(`/interface return game.table_to_json(global.servers)`)
+    const result = lobby_rcon.send(`/interface return game.table_to_json(global.servers)`)
 
     //Combine result with object_for_lua.
     for (let [key, value] of Object.entries(result)) {
-        4
         //If the key is lobby set lobby to the value as push will throw an error.
         if (key == 'lobby') {
             object_for_lua['lobby'] = value
@@ -100,9 +91,99 @@ exports.init = async function(lobby_rcon_, local_rcons_) {
     //Wait for the server to send the object
     await lobby_rcon.send(`/interface global.servers= game.json_to_table('${json}')`)
     console.log(object_for_lua)
-
 }
 
+
+
+//function called by main where lobby_rcon_ is the open rcon to the lobby and local_rcons_ is all the rcon connections including the lobby.
+//file_events is the events the run when the files change
+exports.init = async function(lobby_rcon_, local_rcons_, file_events) {
+    //setting file variables to the parms
+    lobby_rcon = await lobby_rcon_
+    local_rcons = await local_rcons_
+
+    //starting the server
+    start().catch(err => {
+        console.error(err);
+        process.exitCode = 1;
+    });
+    file_events
+    //server setup 
+    server_setup()
+
+    //when the Started_game game event is run in file_listener this function will run
+    file_events.on("Started_game", async function(object) {
+
+        //Adding the name to beiging of the args
+        object.arguments.unshift(object.name)
+
+        //setting the args and server parms
+        const args = object.arguments
+        const server = object.server
+
+        //Checking if the server is local
+        if (servers["local_servers"][server] != undefined) {
+
+            //Join the args to then run /start 
+            args = args.join(' ')
+
+            //get the open rcon connection
+            let rcon2 = local_rcons[server]
+
+            //wait 30 sec the start the game
+            setTimeout(async function() {
+                await rcon2.send("/start " + args)
+            }, 30000)
+        } else {
+            //Get the id of the server
+            const str_key = servers["remote_servers"][server]
+
+            //If no socket error
+            if (sockets[str_key] === undefined) { console.error("cant find server"); return }
+
+            //If their is a socket send the socket the args and the airtable_id
+            sockets[str_key].send(JSON.stringify({ "type": "start", "args": args, "sever": server, "id": airtable_id }));
+        }
+    });
+    file_events.on("end_game", async function(object) {
+        //Geting server ip 
+        const server = object.server
+
+        //Getting open rcon connection
+        let rcon = local_rcons[server]
+
+        //Send the stop command
+        await rcon.send("/stop_games")
+
+        //In 10 sec kick all players
+        setTimeout(async function() {
+
+            //The command is kill_all 
+            await rcon.send("/kill_all")
+        }, 10000)
+
+        //In 10 sec also print all the scores
+        setTimeout(async function() {
+
+            //Get the lobby rcon
+            let rcon2 = lobby_rcon
+
+            //Print the gold data and the player name
+            await rcon2.send("/sc game.print( \"[color=#FFD700]1st: " + object.Gold + " with a score of " + object.Gold_data + ".[/color]\")")
+
+            //If their is a silver player print it 
+            if (object.Silver != undefined) {
+                await rcon2.send("/sc game.print( \"[color=#C0C0C0]2nd: " + object.Silver + " with a score of " + object.Silver_data + ".[/color]\")")
+
+                //If their is a Bronze player print it
+                if (object.Bronze != undefined) {
+                    await rcon2.send("/sc game.print(\"[color=#cd7f32]3rd:" + object.Bronze + " with a score of" + object.Bronze_data + ".[/color]\")")
+                }
+            }
+        }, 10000)
+    });
+
+};
 //Creating a new server and setting the event handlers.
 const wss = new WebSocket.Server({ noServer: true });
 wss.on("connection", function(ws, request) {
@@ -114,7 +195,7 @@ wss.on("connection", function(ws, request) {
 
     //Run ondata when data comes in 
     ws.on("message", async function(msg) {
-        ondata(msg)
+        ondata(msg, ws)
     });
 
     //When the connection is closed print this.
@@ -147,7 +228,7 @@ function authenticate(request) {
 }
 
 //Function ran when data is send to the server
-async function ondata(msg) {
+async function ondata(msg, ws) {
     let data
 
     //try decode data to json
@@ -190,7 +271,7 @@ async function ondata(msg) {
 
     if (data.id != undefined) {
         //If id key is set store the connection so more calls can be made.
-        exports.sockets[data.id] = ws
+        sockets[data.id] = ws
     } else {
         //If the game has been ended print who has won in the lobby.
         if (data.type === "end_game") {
