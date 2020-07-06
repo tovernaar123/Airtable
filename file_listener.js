@@ -56,7 +56,7 @@ async function run_data(data) {
     var object = JSON.parse(data)
     switch (object.type) {
         case "Started_game":
-            var json = clone(require("./score_template.json"));
+            var json = clone(require("./presets/score_template.json"));
             var player_ids = []
             for (let player of object.players) {
                 player_ids.push(await airtable.get_player_id(player))
@@ -76,7 +76,7 @@ async function run_data(data) {
 
         case "end_game":
             var current_timeDate = new Date()
-            var json = clone(require("./score_update_template.json"));
+            var json = clone(require("./presets/score_update_template.json"));
             var players
             json[0].id = airtable_id
             await Promise.all([airtable.get_player_id(object.Gold), airtable.get_player_id(object.Silver), airtable.get_player_id(object.Bronze)]).then((values) => {

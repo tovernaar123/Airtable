@@ -1,8 +1,7 @@
 "use strict";
-var result = require('dotenv').config()
-var variables = result.parsed
-global.key = variables.Api_key
-global.servers = JSON.parse((variables.Servers))
+require('dotenv').config();
+var servers = JSON.parse((process.env.Servers));
+global.servers = servers;
 require("./file_listener.js")
 
 const Rcon = require("rcon-client").Rcon
@@ -11,179 +10,22 @@ async function connect_rcon(port, pw) {
     await rcon.connect()
     return rcon
 }
-
-//rcon2.send("hi")
-//rcon.send("hi")
-
-const crypto = require("crypto");
-const fs = require("fs").promises;
-const https = require("https");
-const util = require("util");
-
-const jwt = require("jsonwebtoken");
-const WebSocket = require("ws");
-var sockets = {}
-var server;
-if (variables.Is_lobby === "true") {
-    console.log("running as server")
-    var config;
-    var secret;
-    const wss = new WebSocket.Server({ noServer: true });
-    wss.on("connection", function(ws, request) {
-        console.log(`Received connection from ${request.socket.remoteAddress}`);
-        ws.send(JSON.stringify({ "type": "connected" }));
-        ws.on("message", async function(msg) {
-            console.log(msg)
-            let data = JSON.parse(msg);
-            if (data.type === "server_object") {
-                console.log(data.data)
-                var object_for_lua = data.data
-                var object = servers["lobby"]
-                const rcon = await connect_rcon(object.Rcon_port, object.Rcon_pass)
-                var result = await rcon.send(`/interface return game.table_to_json(global.servers)`)
-                result = JSON.parse(result.split('\n')[0])
-                console.log(result)
-                console.log(object_for_lua)
-                for (let [key, value] of Object.entries(result)) {
-                    if (object_for_lua[key]) {
-                        object_for_lua[key].push(...value);
-                    } else {
-                        object_for_lua[key] = value;
-                    }
-                }
-                console.log(object_for_lua)
-                var json = JSON.stringify(object_for_lua)
-                var json2 = {}
-                json2.type = 'lobby_set'
-                json2.data = object_for_lua.lobby
-                ws.send(JSON.stringify(json2))
-                rcon.send(`/interface global.servers= game.json_to_table('${json}')`)
-                return
-            }
-            if (data.id != undefined) {
-                sockets[data.id] = ws
-            } else {
-                if (data.type === "end_game") {
-                    print_who_won(data["data"].object)
-                }
-            }
-            console.log("got data")
-            console.log(data);
-        });
-
-        ws.on("close", function(code, reason) {
-            console.log(`Connection from ${request.socket.remoteAddress} closed`);
-        });
-    });
-
-    function authenticate(request) {
-        let token = request.headers["authorization"];
-        if (!token) {
-            return false;
-        }
-
-        try {
-            jwt.verify(token, secret);
-
-        } catch (err) {
-            return false;
-        }
-
-        return true;
-    }
-
-
-    async function start() {
-        //let bytes = await util.promisify(crypto.randomBytes)(256);
-        //bytes.toString("base64")
-        //token: jwt.sign({}, bytes)
-        secret = Buffer.from(variables.secret, "base64")
-        let server = https.createServer({
-            key: await fs.readFile(variables.key),
-            cert: await fs.readFile(variables.cert),
-        });
-
-        server.on("upgrade", function(request, socket, head) {
-            if (!authenticate(request)) {
-                socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
-                socket.destroy();
-                return;
-            }
-
-            wss.handleUpgrade(request, socket, head, function done(ws) {
-                wss.emit("connection", ws, request);
-            });
-        });
-
-        await new Promise((resolve, reject) => {
-            server.on("error", reject);
-            server.listen(variables.port, "0.0.0.0", () => {
-                server.off("error", reject);
-                console.log(`listening on ${variables.port}`);
-                resolve();
-            });
-        });
-    }
-
-    if (require.main === module) {
-        start().catch(err => {
-            console.error(err);
-            process.exitCode = 1;
-        });
-    }
-} else {
-    var reconnecting = false
-    var interval_token
-    async function client() {
-        let cert = await fs.readFile(variables.cert);
-
-        let options = {
-            headers: { "Authorization": variables.token },
-            port: 1
-        }
-        if (cert) {
-            options.ca = cert;
-        }
-        if (/(\d+\.){3}\d+/.test(new URL(variables.url).hostname)) {
-            // Overzealous ws lib adds SNI for IP hosts.
-            options.servername = "";
-        }
-        let ws = new WebSocket(variables.url, options);
-        ws.on("open", function() {
-            ws.send(JSON.stringify({ "id": "expgaming" }));
-            if (reconnecting) {
-                clearInterval(interval_token)
-            }
-        });
-        ws.on("message", function(msg) {
-            ondata(msg)
-        });
-        ws.on("error", function(error) {
-            if (reconnecting) {
-                console.log("cant reconnect try again in 10 sec")
-            } else {
-                console.error(error)
-            }
-        })
-        ws.on("close", function() {
-            console.log("Connection lost");
-            if (!reconnecting) {
-                interval_token = setInterval(function() {
-                    client()
-                }, 10000)
-            }
-            reconnecting = true
-        });
-        server = ws
-    }
-
-    if (require.main === module) {
-        client().catch(err => {
-            console.error(err);
-            process.exitCode = 1;
-        });
-    }
+const lobby = servers["lobby"]
+const lobby_rcon = connect_rcon(lobby.Rcon_port, lobby.Rcon_pass)
+const { sockets, init } = require('./sever.js')
+const locals_rcons = {}
+for (let variable in servers["local_servers"]) {
+    let object = servers["local_servers"][variable]
+    locals_rcons[variable] = connect_rcon(object.Rcon_port, object.Rcon_pass)
 }
+
+
+init(lobby_rcon, locals_rcons)
+
+
+
+
+
 async function ondata(msg) {
     let data = JSON.parse(msg);
     console.log(data)
@@ -215,65 +57,6 @@ async function ondata(msg) {
             break
     }
 }
-
-async function do_init() {
-    var object_for_lua = {}
-    for (let variable in servers["local_servers"]) {
-        const object = servers["local_servers"][variable]
-        const rcon = await connect_rcon(object.Rcon_port, object.Rcon_pass)
-
-        const is_lobby = object.is_lobby
-        const ip = variable
-        await rcon.send(`/set_lobby ${is_lobby}`)
-        await rcon.send(`/set_server_address ${ip}`)
-        if (is_lobby) {
-            console.log(`${variable} is the lobby. `)
-            object_for_lua['lobby'] = variable
-            await rcon.end()
-            continue
-        }
-        var result = await rcon.send('/interface local result = {} for i , surface in pairs(game.surfaces) do result[surface.name] = true end return game.table_to_json(result)')
-        var result2 = await rcon.send('/interface local result = {} for name,mini_game in pairs(mini_games.mini_games)do result[mini_game.map] = name end return game.table_to_json(result)')
-        await rcon.end()
-        var result = result.split('\n')[0]
-        const json1 = JSON.parse(result)
-        var result = result2.split('\n')[0]
-        const json2 = JSON.parse(result)
-        var games = []
-        for (let name in json2) {
-            if (json1[name] != undefined) {
-                var internal_name = json2[name]
-                if (object_for_lua[internal_name] == undefined) { object_for_lua[internal_name] = [] }
-                object_for_lua[internal_name].push(variable)
-                games.push(internal_name)
-            }
-        }
-        games = games.join(' and ')
-        console.log(`${variable} is running ${games}. `)
-    }
-    if (variables.Is_lobby == 'true') {
-
-        var object = servers["lobby"]
-        const rcon = await connect_rcon(object.Rcon_port, object.Rcon_pass)
-        const result = await rcon.send(`/interface return game.table_to_json(global.servers)`)
-        for (let variable in object_for_lua) {
-            if (variable === 'lobby') {} else {
-                if (result[variable] != undefined) {
-                    var object = object_for_lua[variable]
-                    object_for_lua[variable] = object.Concat(result[variable])
-                }
-            }
-        }
-        var json = JSON.stringify(object_for_lua)
-        console.log(result)
-
-        await rcon.send(`/interface global.servers= game.json_to_table('${json}')`)
-        console.log(object_for_lua)
-    } else {
-        server.send(JSON.stringify({ "type": 'server_object', "id": "expgaming", "data": object_for_lua }))
-    }
-}
-do_init()
 
 global.tell_server = async function(args, server, id) {
     if (servers["local_servers"][server] != undefined) {
