@@ -378,10 +378,10 @@ file_events.on("end_game", async function(object) {
     });
     json[0].fields["Gold Player"][0] = players[0]
     json[0].fields["Gold Data"] = object["Gold_data"]
-    if (players[2] != undefined) {
+    if (players[1] != undefined) {
         json[0].fields["Silver Player"][0] = players[1]
         json[0].fields["Silver Data"] = object["Silver_data"]
-        if (players[3] != undefined) {
+        if (players[2] != undefined) {
             json[0].fields["Bronze Player"][0] = players[2]
             json[0].fields["Bronze Data"] = object["Bronze_data"]
         } else {
