@@ -2,6 +2,7 @@
 
 const events = require('events');
 const fs = require('fs');
+const path = require('path');
 
 
 function resolveToAbsolutePath(path) {
@@ -40,9 +41,9 @@ exports.watch_files = function(servers) {
 }
 
 
-function readfile(filename, path) {
+function readfile(filename, dir) {
     try {
-        var data = fs.readFileSync(path + "\\" + filename, 'utf8');
+        var data = fs.readFileSync(path.join(dir, filename), 'utf8');
         return data
     } catch (e) {
         console.error("error when reading file ", e.stack)
