@@ -69,7 +69,7 @@ if (process.env.Is_lobby === "true") {
                 sockets[data.id] = ws
             } else {
                 if (data.type === "end_game") {
-                    print_who_won(data["data"].object)
+                    print_who_won(data["data"])
                 }
             }
             console.log("got data")
