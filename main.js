@@ -28,7 +28,7 @@ async function connect_rcon(port, pw) {
 }
 
 var sockets = {}
-var server;
+var websocket;
 if (process.env.Is_lobby === "true") {
     console.log("running as server")
     var config;
@@ -179,7 +179,7 @@ if (process.env.Is_lobby === "true") {
             }
             reconnecting = true
         });
-        server = ws
+        websocket = ws
     }
 
     if (require.main === module) {
@@ -275,7 +275,7 @@ async function do_init() {
         await rcon.send(`/interface global.servers= game.json_to_table('${json}')`)
         console.log(object_for_lua)
     } else {
-        server.send(JSON.stringify({ "type": 'server_object', "id": "expgaming", "data": object_for_lua }))
+        websocket.send(JSON.stringify({ "type": 'server_object', "id": "expgaming", "data": object_for_lua }))
     }
 }
 do_init()
@@ -327,7 +327,7 @@ async function send_players(server, object) {
     if (process.env.Is_lobby == 'true') {
         print_who_won(object)
     } else {
-        server.send(JSON.stringify({ "type": "end_game", "data": object }));
+        websocket.send(JSON.stringify({ "type": "end_game", "data": object }));
     }
 }
 
