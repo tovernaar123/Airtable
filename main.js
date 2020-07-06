@@ -27,8 +27,9 @@ async function connect_rcon(port, pw) {
     return rcon
 }
 
-var sockets = {}
-var server;
+var sockets = new Set();
+let server_ip_to_socket = new Map();
+var websocket;
 if (process.env.Is_lobby === "true") {
     console.log("running as server")
     var config;
@@ -36,12 +37,16 @@ if (process.env.Is_lobby === "true") {
     const wss = new WebSocket.Server({ noServer: true });
     wss.on("connection", function(ws, request) {
         console.log(`Received connection from ${request.socket.remoteAddress}`);
+        sockets.add(ws);
         ws.send(JSON.stringify({ "type": "connected" }));
         ws.on("message", async function(msg) {
             console.log(msg)
             let data = JSON.parse(msg);
             if (data.type === "server_object") {
                 console.log(data.data)
+                for (let [key, server_ips] of Object.entries(data.data)) {
+                    server_ips.map(ip => server_ip_to_socket.set(ip, ws));
+                }
                 var object_for_lua = data.data
                 var object = servers["lobby"]
                 const rcon = await connect_rcon(object.Rcon_port, object.Rcon_pass)
@@ -64,13 +69,9 @@ if (process.env.Is_lobby === "true") {
                 ws.send(JSON.stringify(json2))
                 rcon.send(`/interface global.servers= game.json_to_table('${json}')`)
                 return
-            }
-            if (data.id != undefined) {
-                sockets[data.id] = ws
-            } else {
-                if (data.type === "end_game") {
-                    print_who_won(data["data"].object)
-                }
+
+            } else if (data.type === "end_game") {
+                print_who_won(data["data"])
             }
             console.log("got data")
             console.log(data);
@@ -78,6 +79,12 @@ if (process.env.Is_lobby === "true") {
 
         ws.on("close", function(code, reason) {
             console.log(`Connection from ${request.socket.remoteAddress} closed`);
+            sockets.delete(ws);
+            for (let [server_ip, socket] of server_ip_to_socket) {
+                if (socket === ws) {
+                    server_ip_to_socket.delete(server_ip);
+                }
+            }
         });
     });
 
@@ -179,7 +186,7 @@ if (process.env.Is_lobby === "true") {
             }
             reconnecting = true
         });
-        server = ws
+        websocket = ws
     }
 
     if (require.main === module) {
@@ -275,7 +282,7 @@ async function do_init() {
         await rcon.send(`/interface global.servers= game.json_to_table('${json}')`)
         console.log(object_for_lua)
     } else {
-        server.send(JSON.stringify({ "type": 'server_object', "id": "expgaming", "data": object_for_lua }))
+        websocket.send(JSON.stringify({ "type": 'server_object', "data": object_for_lua }))
     }
 }
 do_init()
@@ -294,9 +301,12 @@ async function tell_server(args, server, id) {
             console.error("Server start must be on lobby");
             return;
         }
-        const str_key = servers["remote_servers"][server]
-        if (sockets[str_key] === undefined) { console.error("cant find server"); return }
-        sockets[str_key].send(JSON.stringify({ "type": "start", "args": args, "sever": server, "id": id }));
+        let socket = server_ip_to_socket.get(server);
+        if (!socket) {
+            console.error(`No connection for server ${server}`);
+            return;
+        }
+        socket.send(JSON.stringify({ "type": "start", "args": args, "sever": server, "id": id }));
     }
 
 }
@@ -327,7 +337,7 @@ async function send_players(server, object) {
     if (process.env.Is_lobby == 'true') {
         print_who_won(object)
     } else {
-        server.send(JSON.stringify({ "type": "end_game", "data": object }));
+        websocket.send(JSON.stringify({ "type": "end_game", "data": object }));
     }
 }
 
@@ -368,10 +378,10 @@ file_events.on("end_game", async function(object) {
     });
     json[0].fields["Gold Player"][0] = players[0]
     json[0].fields["Gold Data"] = object["Gold_data"]
-    if (players[2] != undefined) {
+    if (players[1] != undefined) {
         json[0].fields["Silver Player"][0] = players[1]
         json[0].fields["Silver Data"] = object["Silver_data"]
-        if (players[3] != undefined) {
+        if (players[2] != undefined) {
             json[0].fields["Bronze Player"][0] = players[2]
             json[0].fields["Bronze Data"] = object["Bronze_data"]
         } else {
