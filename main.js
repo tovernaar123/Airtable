@@ -1,26 +1,32 @@
 "use strict";
 require('dotenv').config();
 
-global.servers = JSON.parse((process.env.Servers));
-require("./file_listener.js")
-
+const Airtable = require('airtable');
+const clone = require('rfdc')()
+const crypto = require("crypto");
+const fs = require("fs").promises;
+const jwt = require("jsonwebtoken");
+const https = require("https");
 const Rcon = require("rcon-client").Rcon
+const util = require("util");
+const WebSocket = require("ws");
+
+const file_listener = require("./file_listener.js")
+const airtable = require("./airtable_object.js")
+
+
+const servers = JSON.parse((process.env.Servers));
+
+const base = new Airtable({ apiKey: process.env.Api_key }).base(process.env.Base_key);
+const file_events = file_listener.watch_files(servers);
+
+
 async function connect_rcon(port, pw) {
     const rcon = new Rcon({ host: "localhost", port: port, password: pw })
     await rcon.connect()
     return rcon
 }
 
-//rcon2.send("hi")
-//rcon.send("hi")
-
-const crypto = require("crypto");
-const fs = require("fs").promises;
-const https = require("https");
-const util = require("util");
-
-const jwt = require("jsonwebtoken");
-const WebSocket = require("ws");
 var sockets = {}
 var server;
 if (process.env.Is_lobby === "true") {
@@ -274,7 +280,7 @@ async function do_init() {
 }
 do_init()
 
-global.tell_server = async function(args, server, id) {
+async function tell_server(args, server, id) {
     if (servers["local_servers"][server] != undefined) {
         args = args.join(' ')
         const server_object = servers.local_servers[server]
@@ -284,7 +290,7 @@ global.tell_server = async function(args, server, id) {
             rcon2.end()
         }, 30000)
     } else {
-        if (!process.env.Is_lobby) {
+        if (process.env.Is_lobby != 'true') {
             console.error("Server start must be on lobby");
             return;
         }
@@ -310,7 +316,7 @@ async function print_who_won(object) {
     }, 1000)
 }
 
-global.send_players = async function(server, object) {
+async function send_players(server, object) {
     const server_object = servers.local_servers[server]
     var rcon = await connect_rcon(server_object.Rcon_port, server_object.Rcon_pass)
     await rcon.send("/stop_games")
@@ -318,9 +324,72 @@ global.send_players = async function(server, object) {
         await rcon.send("/kill_all")
         await rcon.end()
     }, 5000)
-    if (process.env.Is_lobby) {
+    if (process.env.Is_lobby == 'true') {
         print_who_won(object)
     } else {
         server.send(JSON.stringify({ "type": "end_game", "data": object }));
     }
 }
+
+
+file_events.on("Started_game", async function(object) {
+    var json = clone(require("./score_template.json"));
+    var player_ids = []
+    for (let player of object.players) {
+        player_ids.push(await airtable.get_player_id(base, player))
+    }
+    json[0].fields["Players Present"] = player_ids
+    json[0].fields["Time Started"] = new Date().toISOString();
+    json[0].fields["Game"][0] = await airtable.get_game_id(base, object.name)
+    console.log("game starting with ")
+    console.log(json)
+    const created = await base('Scoring Data').create(json)
+    console.log(created)
+    global.airtable_id = created[0].id
+    object.arguments.unshift(object.name)
+    console.log(object.arguments)
+    tell_server(object.arguments, object.server, airtable_id)
+});
+
+file_events.on("end_game", async function(object) {
+    var current_timeDate = new Date()
+    var json = clone(require("./score_update_template.json"));
+    var players
+    json[0].id = airtable_id
+    await Promise.all([
+        airtable.get_player_id(base, object.Gold),
+        airtable.get_player_id(base, object.Silver),
+        airtable.get_player_id(base, object.Bronze),
+    ]).then((values) => {
+        players = values
+    });
+    players = players.filter(function(el) {
+        return el != undefined;
+    });
+    json[0].fields["Gold Player"][0] = players[0]
+    json[0].fields["Gold Data"] = object["Gold_data"]
+    if (players[2] != undefined) {
+        json[0].fields["Silver Player"][0] = players[1]
+        json[0].fields["Silver Data"] = object["Silver_data"]
+        if (players[3] != undefined) {
+            json[0].fields["Bronze Player"][0] = players[2]
+            json[0].fields["Bronze Data"] = object["Bronze_data"]
+        } else {
+            delete json[0].fields["Bronze Player"]
+            delete json[0].fields["Bronze Data"]
+        }
+    } else {
+        delete json[0].fields["Silver Player"]
+        delete json[0].fields["Silver Data"]
+        delete json[0].fields["Bronze Player"]
+        delete json[0].fields["Bronze Data"]
+    }
+    var begin_time = await airtable.general_lookup(base, "Scoring Data", "Match ID", airtable_id, "Time Started")
+    begin_time = new Date(begin_time)
+    var difernce = (current_timeDate - begin_time) / 1000 * 60
+    json[0].fields["Duration"] = difernce
+    console.log("game ending with ")
+    console.log(json)
+    send_players(object.server, object)
+    console.log(base('Scoring Data').update(json))
+});
