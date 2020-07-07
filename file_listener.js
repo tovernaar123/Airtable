@@ -47,7 +47,7 @@ function readfile(filename, dir) {
         return data;
     } catch (e) {
         console.error("error when reading file ", e.stack);
-        return 'Error:' + e.stack;
+        return `Error: ${e.stack}`;
     }
 
 }

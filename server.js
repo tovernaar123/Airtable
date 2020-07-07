@@ -138,7 +138,7 @@ exports.init = async function(lobby_rcon_, local_rcons_, file_events) {
 
             //wait 30 sec the start the game
             setTimeout(async function() {
-                await rcon2.send("/start " + args);
+                await rcon2.send(`/start ${args}`);
             }, 30000);
         } else {
             //Get the socket of the server
@@ -178,15 +178,15 @@ exports.init = async function(lobby_rcon_, local_rcons_, file_events) {
             let rcon2 = lobby_rcon;
 
             //Print the gold data and the player name
-            await rcon2.send("/sc game.print( \"[color=#FFD700]1st: " + object.Gold + " with a score of " + object.Gold_data + ".[/color]\")");
+            await rcon2.send(`/sc game.print("[color=#FFD700]1st: ${object.Gold} with a score of ${object.Gold_data}.[/color]")`);
 
             //If their is a silver player print it 
             if (object.Silver != undefined) {
-                await rcon2.send("/sc game.print( \"[color=#C0C0C0]2nd: " + object.Silver + " with a score of " + object.Silver_data + ".[/color]\")");
+                await rcon2.send(`/sc game.print("[color=#C0C0C0]2nd: ${object.Silver} with a score of ${object.Silver_data}.[/color]")`);
 
                 //If their is a Bronze player print it
                 if (object.Bronze != undefined) {
-                    await rcon2.send("/sc game.print(\"[color=#cd7f32]3rd:" + object.Bronze + " with a score of" + object.Bronze_data + ".[/color]\")");
+                    await rcon2.send(`/sc game.print("[color=#cd7f32]3rd: ${object.Bronze} with a score of ${object.Bronze_data}.[/color]")`);
                 }
             }
         }, 10000);
@@ -290,11 +290,11 @@ async function ondata(msg, ws) {
             setTimeout(async function() {
                 let rcon = lobby_rcon;
                 let object = data.data;
-                await rcon.send("/sc game.print( \"[color=#FFD700]1st: " + object.Gold + " with a score of " + object.Gold_data + ".[/color]\")");
+                await rcon.send(`/sc game.print("[color=#FFD700]1st: ${object.Gold} with a score of ${object.Gold_data}.[/color]")`);
                 if (object.Silver != undefined) {
-                    await rcon.send("/sc game.print( \"[color=#C0C0C0]2nd: " + object.Silver + " with a score of " + object.Silver_data + ".[/color]\")");
+                    await rcon.send(`/sc game.print("[color=#C0C0C0]2nd: ${object.Silver} with a score of ${object.Silver_data}.[/color]")`);
                     if (object.Bronze != undefined) {
-                        await rcon.send("/sc game.print(\"[color=#cd7f32]3rd:" + object.Bronze + " with a score of" + object.Bronze_data + ".[/color]\")");
+                        await rcon.send(`/sc game.print("[color=#cd7f32]3rd: ${object.Bronze} with a score of ${object.Bronze_data}.[/color]")`);
                     }
                 }
             }, 10000);

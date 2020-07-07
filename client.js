@@ -89,7 +89,7 @@ async function ondata(msg) {
 
             //wait 30 sec then /start the game with the arguments
             setTimeout(async function() {
-                await rcon.send("/start " + args);
+                await rcon.send(`/start ${args}`);
             }, 30000);
 
             //set the id to the data id
@@ -119,7 +119,7 @@ async function ondata(msg) {
             if (data.type === "connected") { console.log("Connected to server."); return; }
 
             //Else print that the type makes no sence
-            console.log("Unkown type " + data.type);
+            console.log(`Unkown type ${data.type}`);
             break;
     }
 }
