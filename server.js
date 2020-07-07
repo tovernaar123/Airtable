@@ -1,6 +1,6 @@
 "use strict";
 
-var servers = JSON.parse((process.env.Servers));
+let servers = JSON.parse((process.env.Servers));
 const fs = require("fs").promises;
 const https = require("https");
 //const util = require("util");
@@ -8,7 +8,7 @@ const https = require("https");
 const jwt = require("jsonwebtoken");
 const WebSocket = require("ws");
 let server_ip_to_socket = new Map();
-var secret;
+let secret;
 let lobby_rcon;
 let local_rcons;
 let id;
@@ -16,7 +16,7 @@ const { Started_game, end_game } = require('./airtable.js');
 
 //server setup
 async function server_setup() {
-    var object_for_lua = {};
+    let object_for_lua = {};
     for (let variable in servers["local_servers"]) {
         //use await cause its still connecting
         const rcon = local_rcons[variable];
@@ -54,7 +54,7 @@ async function server_setup() {
         //checking what the server is running by checking the maps against the games
         for (let name in json2) {
             if (json1[name] != undefined) {
-                var internal_name = json2[name];
+                let internal_name = json2[name];
                 if (object_for_lua[internal_name] == undefined) { object_for_lua[internal_name] = []; }
                 object_for_lua[internal_name].push(variable);
                 games.push(internal_name);
@@ -87,7 +87,7 @@ async function server_setup() {
     }
 
     //The lua can only read Json so lets make it json.
-    var json = JSON.stringify(object_for_lua);
+    let json = JSON.stringify(object_for_lua);
 
     //Wait for the server to send the object
     await lobby_rcon.send(`/interface global.servers= game.json_to_table('${json}')`);
@@ -255,10 +255,10 @@ async function ondata(msg, ws) {
     //check the key type of data to see what action to take
     if (data.type === "server_object") {
         //if type is server_object it means that the client has send the mini_games its running
-        var object_for_lua = data.data;
+        let object_for_lua = data.data;
 
         //get the all the current games to combine with the games of this client
-        var result = await lobby_rcon.send(`/interface return game.table_to_json(global.servers)`);
+        let result = await lobby_rcon.send(`/interface return game.table_to_json(global.servers)`);
         result = JSON.parse(result.split('\n')[0]);
         for (let [key, server_ips] of Object.entries(data.data)) {
             server_ips.map(ip => server_ip_to_socket.set(ip, ws));
@@ -274,8 +274,8 @@ async function ondata(msg, ws) {
         console.log(object_for_lua);
 
         //reply back to the client the lobby ip:port
-        var json = JSON.stringify(object_for_lua);
-        var json2 = {};
+        let json = JSON.stringify(object_for_lua);
+        let json2 = {};
         json2.type = 'lobby_set';
         json2.data = object_for_lua.lobby;
         ws.send(JSON.stringify(json2));

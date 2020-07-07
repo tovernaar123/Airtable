@@ -11,7 +11,7 @@ exports.init = async function(local_rcons_, file_events) {
     await server_setup();
     file_events.on("end_game", async function(object) {
         await end_game(object, id);
-        var rcon = local_rcons[object.server];
+        let rcon = local_rcons[object.server];
         await rcon.send("/stop_games");
         setTimeout(async function() {
             await rcon.send("/kill_all");
