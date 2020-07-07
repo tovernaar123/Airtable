@@ -7,12 +7,11 @@ let websocket
 let id
 exports.init = async function(local_rcons_, file_events) {
     local_rcons = local_rcons_
-    await client().catch(err => { console.error(err); });
-    server_setup()
-
+    await client()
+    await server_setup()
     file_events.on("end_game", async function(object) {
         await end_game(object, id)
-        var rcon = local_rcons[server]
+        var rcon = local_rcons[object.server]
         await rcon.send("/stop_games")
         setTimeout(async function() {
             await rcon.send("/kill_all")
@@ -143,7 +142,7 @@ async function server_setup() {
         const is_lobby = object.is_lobby
 
         //Check if someting has goan wrong
-        if (is_lobby == true) { console.error('client cant have the lobby server'); return; }
+        if (is_lobby == true) { throw new Error('client cant have the lobby server'); }
 
         //Get the ip:prort of the server
         const ip = variable

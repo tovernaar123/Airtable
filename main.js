@@ -22,12 +22,23 @@ async function start() {
     if (process.env.Is_lobby === 'true') {
         const { init } = require('./sever.js')
         const lobby = servers["lobby"]
-        const lobby_rcon = connect_rcon(lobby.Rcon_port, lobby.Rcon_pass)
-        init(lobby_rcon, locals_rcons, file_events)
+        const lobby_rcon = await connect_rcon(lobby.Rcon_port, lobby.Rcon_pass)
+        await init(lobby_rcon, locals_rcons, file_events).catch(err => {
+            console.error(err);
+            process.exit(1);
+        });
     } else {
         const { init } = require('./client.js')
-        init(locals_rcons, file_events)
+        await init(locals_rcons, file_events).catch(err => {
+            console.error(err);
+            process.exit(1);
+        });
     }
 
 }
-start()
+if (require.main === module) {
+    start().catch(err => {
+        console.error(err);
+        process.exit(1)
+    });
+}

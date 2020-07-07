@@ -1,5 +1,5 @@
 "use strict";
-console.log("running as server")
+
 var servers = JSON.parse((process.env.Servers));
 const fs = require("fs").promises;
 const https = require("https");
@@ -99,18 +99,17 @@ async function server_setup() {
 //function called by main where lobby_rcon_ is the open rcon to the lobby and local_rcons_ is all the rcon connections including the lobby.
 //file_events is the events the run when the files change
 exports.init = async function(lobby_rcon_, local_rcons_, file_events) {
+    console.log("running as server")
+
     //setting file variables to the parms
     lobby_rcon = await lobby_rcon_
     local_rcons = await local_rcons_
 
     //starting the server
-    start().catch(err => {
-        console.error(err);
-        process.exitCode = 1;
-    });
-    file_events
+    await start()
+
     //server setup 
-    server_setup()
+    await server_setup()
 
     //when the Started_game game event is run in file_listener this function will run
     file_events.on("Started_game", async function(object) {
@@ -287,7 +286,17 @@ async function ondata(msg, ws) {
     } else {
         //If the game has been ended print who has won in the lobby.
         if (data.type === "end_game") {
-            print_who_won(data["data"].object)
+            //send it 10 sec
+            setTimeout(async function() {
+                let rcon = lobby_rcon
+                await rcon.send("/sc game.print( \"[color=#FFD700]1st: " + object.Gold + " with a score of " + object.Gold_data + ".[/color]\")")
+                if (object.Silver != undefined) {
+                    await rcon.send("/sc game.print( \"[color=#C0C0C0]2nd: " + object.Silver + " with a score of " + object.Silver_data + ".[/color]\")")
+                    if (object.Bronze != undefined) {
+                        await rcon.send("/sc game.print(\"[color=#cd7f32]3rd:" + object.Bronze + " with a score of" + object.Bronze_data + ".[/color]\")")
+                    }
+                }
+            }, 10000)
         }
     }
     console.log("got data")
