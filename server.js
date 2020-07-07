@@ -14,7 +14,7 @@ let local_rcons;
 let id;
 const { Started_game, end_game } = require('./airtable.js');
 
-//server setup 
+//server setup
 async function server_setup() {
     var object_for_lua = {};
     for (let variable in servers["local_servers"]) {
@@ -60,7 +60,7 @@ async function server_setup() {
                 games.push(internal_name);
             }
         }
-        //just some printing for debbuging 
+        //just some printing for debbuging
         games = games.join(' and ');
         console.log(`${variable} is running ${games}. `);
     }
@@ -108,7 +108,7 @@ exports.init = async function(lobby_rcon_, local_rcons_, file_events) {
     //starting the server
     await start();
 
-    //server setup 
+    //server setup
     await server_setup();
 
     //when the Started_game game event is run in file_listener this function will run
@@ -130,7 +130,7 @@ exports.init = async function(lobby_rcon_, local_rcons_, file_events) {
         //Checking if the server is local
         if (servers["local_servers"][server] != undefined) {
 
-            //Join the args to then run /start 
+            //Join the args to then run /start
             args = args.join(' ');
 
             //get the open rcon connection
@@ -155,7 +155,7 @@ exports.init = async function(lobby_rcon_, local_rcons_, file_events) {
     file_events.on("end_game", async function(object) {
         await end_game(object, id);
 
-        //Geting server ip 
+        //Geting server ip
         const server = object.server;
 
         //Getting open rcon connection
@@ -167,7 +167,7 @@ exports.init = async function(lobby_rcon_, local_rcons_, file_events) {
         //In 10 sec kick all players
         setTimeout(async function() {
 
-            //The command is kill_all 
+            //The command is kill_all
             await rcon.send("/kill_all");
         }, 10000);
 
@@ -180,7 +180,7 @@ exports.init = async function(lobby_rcon_, local_rcons_, file_events) {
             //Print the gold data and the player name
             await rcon2.send(`/sc game.print("[color=#FFD700]1st: ${object.Gold} with a score of ${object.Gold_data}.[/color]")`);
 
-            //If their is a silver player print it 
+            //If their is a silver player print it
             if (object.Silver != undefined) {
                 await rcon2.send(`/sc game.print("[color=#C0C0C0]2nd: ${object.Silver} with a score of ${object.Silver_data}.[/color]")`);
 
@@ -202,7 +202,7 @@ wss.on("connection", function(ws, request) {
     //Send back to the client that everything has worked.
     ws.send(JSON.stringify({ "type": "connected" }));
 
-    //Run ondata when data comes in 
+    //Run ondata when data comes in
     ws.on("message", async function(msg) {
         ondata(msg, ws);
     });
@@ -252,18 +252,18 @@ async function ondata(msg, ws) {
         console.error(e);
     }
 
-    //check the key type of data to see what action to take 
+    //check the key type of data to see what action to take
     if (data.type === "server_object") {
-        //if type is server_object it means that the client has send the mini_games its running 
+        //if type is server_object it means that the client has send the mini_games its running
         var object_for_lua = data.data;
 
-        //get the all the current games to combine with the games of this client 
+        //get the all the current games to combine with the games of this client
         var result = await lobby_rcon.send(`/interface return game.table_to_json(global.servers)`);
         result = JSON.parse(result.split('\n')[0]);
         for (let [key, server_ips] of Object.entries(data.data)) {
             server_ips.map(ip => server_ip_to_socket.set(ip, ws));
         }
-        //combine both of the objects into 1 
+        //combine both of the objects into 1
         for (let [key, value] of Object.entries(result)) {
             if (object_for_lua[key]) {
                 object_for_lua[key].push(...value);

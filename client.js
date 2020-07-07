@@ -76,7 +76,7 @@ async function ondata(msg) {
     let data = JSON.parse(msg);
     console.log(`data recieved: ${JSON.stringify(data)}`);
 
-    //the data type sets what is going the happen 
+    //the data type sets what is going the happen
     switch (data.type) {
         case "start":
             let args = data.args;
@@ -98,7 +98,7 @@ async function ondata(msg) {
             //break so default is not ran
             break;
         case 'lobby_set':
-            //lobby is the ip:port of the lobby server 
+            //lobby is the ip:port of the lobby server
             let lobby = data.data;
 
             //loop over all the local server and set the lobby
@@ -178,7 +178,7 @@ async function server_setup() {
                 //Get internal_name name of the game
                 let internal_name = games[name];
 
-                //If the array does not exsit yet create it 
+                //If the array does not exsit yet create it
                 if (object_for_lua[internal_name] == undefined) { object_for_lua[internal_name] = []; }
 
                 //Push the the variable or the ip:prot of the server (which is top for loop var) to object_for_lua
