@@ -5,7 +5,7 @@ const servers = JSON.parse((process.env.Servers));
 const { end_game } = require('./airtable.js')
 let websocket
 let id
-exports.cleint_init = async function(local_rcons_, file_events) {
+exports.init = async function(local_rcons_, file_events) {
     local_rcons = local_rcons_
     await client().catch(err => { console.error(err); });
     server_setup()
