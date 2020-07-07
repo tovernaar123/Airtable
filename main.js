@@ -20,19 +20,13 @@ async function start() {
         locals_rcons[variable] = await connect_rcon(object.Rcon_port, object.Rcon_pass)
     }
     if (process.env.Is_lobby === 'true') {
-        const { init } = require('./sever.js')
+        const { init } = require('./server.js')
         const lobby = servers["lobby"]
         const lobby_rcon = await connect_rcon(lobby.Rcon_port, lobby.Rcon_pass)
-        await init(lobby_rcon, locals_rcons, file_events).catch(err => {
-            console.error(err);
-            process.exit(1);
-        });
+        await init(lobby_rcon, locals_rcons, file_events)
     } else {
         const { init } = require('./client.js')
-        await init(locals_rcons, file_events).catch(err => {
-            console.error(err);
-            process.exit(1);
-        });
+        await init(locals_rcons, file_events)
     }
 
 }
