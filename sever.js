@@ -7,11 +7,12 @@ const https = require("https");
 
 const jwt = require("jsonwebtoken");
 const WebSocket = require("ws");
-let sockets = {}
-exports.sockets = sockets
+let server_ip_to_socket = new Map();
 var secret;
 let lobby_rcon
 let local_rcons
+let id
+const { Started_game, end_game } = require('./airtable.js')
 
 //server setup 
 async function server_setup() {
@@ -30,7 +31,7 @@ async function server_setup() {
         await rcon.send(`/set_server_address ${ip}`)
 
         //if the server is the lobby log it and continue as the lobby cant have games
-        if (is_lobby) {
+        if (is_lobby == true) {
             console.log(`${variable} is the lobby. `)
             object_for_lua['lobby'] = variable
             continue
@@ -114,12 +115,18 @@ exports.init = async function(lobby_rcon_, local_rcons_, file_events) {
     //when the Started_game game event is run in file_listener this function will run
     file_events.on("Started_game", async function(object) {
 
+        //Setting the airtable things (this returns an id which the other server needs)
+        id = await Started_game(object)
+
         //Adding the name to beiging of the args
         object.arguments.unshift(object.name)
 
         //setting the args and server parms
         const args = object.arguments
         const server = object.server
+
+        //log the argmunts
+        console.log(`game arguments are ${JSON.stringify(args)}`)
 
         //Checking if the server is local
         if (servers["local_servers"][server] != undefined) {
@@ -135,17 +142,20 @@ exports.init = async function(lobby_rcon_, local_rcons_, file_events) {
                 await rcon2.send("/start " + args)
             }, 30000)
         } else {
-            //Get the id of the server
-            const str_key = servers["remote_servers"][server]
+            //Get the socket of the server
+            let socket = server_ip_to_socket.get(server);
+
 
             //If no socket error
-            if (sockets[str_key] === undefined) { console.error("cant find server"); return }
+            if (socket === undefined) { console.error("cant find server"); return }
 
             //If their is a socket send the socket the args and the airtable_id
-            sockets[str_key].send(JSON.stringify({ "type": "start", "args": args, "sever": server, "id": airtable_id }));
+            socket.send(JSON.stringify({ "type": "start", "args": args, "sever": server, "id": id }));
         }
     });
     file_events.on("end_game", async function(object) {
+        await end_game(object, id)
+
         //Geting server ip 
         const server = object.server
 
@@ -201,6 +211,11 @@ wss.on("connection", function(ws, request) {
     //When the connection is closed print this.
     ws.on("close", function(code, reason) {
         console.log(`Connection from ${request.socket.remoteAddress} closed`);
+        for (let [server_ip, socket] of server_ip_to_socket) {
+            if (socket === ws) {
+                server_ip_to_socket.delete(server_ip);
+            }
+        }
     });
 
     //Making sure and error does not crash the script
@@ -246,7 +261,9 @@ async function ondata(msg, ws) {
         //get the all the current games to combine with the games of this client 
         var result = await lobby_rcon.send(`/interface return game.table_to_json(global.servers)`)
         result = JSON.parse(result.split('\n')[0])
-
+        for (let [key, server_ips] of Object.entries(data.data)) {
+            server_ips.map(ip => server_ip_to_socket.set(ip, ws));
+        }
         //combine both of the objects into 1 
         for (let [key, value] of Object.entries(result)) {
             if (object_for_lua[key]) {
@@ -267,11 +284,6 @@ async function ondata(msg, ws) {
         //set the servers global to object_for_lua
         lobby_rcon.send(`/interface global.servers= game.json_to_table('${json}')`)
         return
-    }
-
-    if (data.id != undefined) {
-        //If id key is set store the connection so more calls can be made.
-        sockets[data.id] = ws
     } else {
         //If the game has been ended print who has won in the lobby.
         if (data.type === "end_game") {
