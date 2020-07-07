@@ -289,6 +289,7 @@ async function ondata(msg, ws) {
             //send it 10 sec
             setTimeout(async function() {
                 let rcon = lobby_rcon
+                let object = data.data
                 await rcon.send("/sc game.print( \"[color=#FFD700]1st: " + object.Gold + " with a score of " + object.Gold_data + ".[/color]\")")
                 if (object.Silver != undefined) {
                     await rcon.send("/sc game.print( \"[color=#C0C0C0]2nd: " + object.Silver + " with a score of " + object.Silver_data + ".[/color]\")")
