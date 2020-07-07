@@ -49,7 +49,7 @@ exports.get_game_id = async function(base, name) {
     @returns {any}  the value found.
  */
 exports.general_lookup = async function(base, table, colum_for_search, value, answer_colum) {
-    let records = base(table).select({
+    let records = await base(table).select({
         filterByFormula: `{${colum_for_search}} = '${value}'`,
         maxRecords: 1,
     }).firstPage();
@@ -58,5 +58,5 @@ exports.general_lookup = async function(base, table, colum_for_search, value, an
         return null;
     }
 
-    return records[0].fields[answer_column];
+    return records[0].fields[answer_colum];
 };

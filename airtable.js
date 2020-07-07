@@ -51,9 +51,11 @@ exports.end_game = async function(object, airtable_id) {
         delete fiels["Bronze Data"];
     }
     let begin_time = await airtable.general_lookup(base, "Scoring Data", "Match ID", airtable_id, "Time Started");
-    begin_time = new Date(begin_time);
-    let difernce = (current_timeDate - begin_time) / 1000 * 60;
-    json[0].fields["Duration"] = difernce;
+    if (begin_time !== null) {
+        begin_time = new Date(begin_time);
+        let difernce = (current_timeDate - begin_time) / 1000;
+        json[0].fields["Duration"] = difernce;
+    }
     console.log(`game ending with this ${JSON.stringify(json)} as the airtable. `);
     console.log(await base('Scoring Data').update(json));
 };
