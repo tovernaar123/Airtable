@@ -23,26 +23,21 @@ exports.Started_game = async function(object) {
 exports.end_game = async function(object, airtable_id) {
     let current_timeDate = new Date();
     let json = clone(require("./presets/score_update_template.json"));
-    let players;
     json[0].id = airtable_id;
-    await Promise.all([
+    let players = await Promise.all([
         airtable.get_player_id(base, object.Gold),
         airtable.get_player_id(base, object.Silver),
         airtable.get_player_id(base, object.Bronze),
-    ]).then((values) => {
-        players = values;
-    });
-    players = players.filter(function(el) {
-        return el != undefined;
-    });
+    ]);
+    players = players.filter(el => el !== null);
     let fiels = json[0].fields;
     console.log(players);
     fiels["Gold Player"][0] = players[0];
     fiels["Gold Data"] = object["Gold_data"];
-    if (players[1] != undefined) {
+    if (players[1] !== undefined) {
         fiels["Silver Player"][0] = players[1];
         fiels["Silver Data"] = object["Silver_data"];
-        if (players[2] != undefined) {
+        if (players[2] !== undefined) {
             fiels["Bronze Player"][0] = players[2];
             fiels["Bronze Data"] = object["Bronze_data"];
         } else {

@@ -1,3 +1,4 @@
+"use strict";
 let local_rcons;
 const WebSocket = require("ws");
 const fs = require("fs").promises;
@@ -33,13 +34,13 @@ async function client() {
 
     let options = {
         headers: { "Authorization": process.env.token },
-        port: 1
+        port: 1,
     };
     if (cert) {
         options.ca = cert;
     }
     if (/(\d+\.){3}\d+/.test(new URL(process.env.url).hostname)) {
-        // Overzealous ws lib adds SNI for IP hosts.
+        //Overzealous ws lib adds SNI for IP hosts.
         options.servername = "";
     }
     let ws = new WebSocket(process.env.url, options);
@@ -102,7 +103,7 @@ async function ondata(msg) {
             let lobby = data.data;
 
             //loop over all the local server and set the lobby
-            for (let name in servers.local_servers) {
+            for (let name of Object.keys(servers.local_servers)) {
 
                 //Get the open rcon connections
                 const rcon = local_rcons[name];
@@ -130,22 +131,16 @@ async function server_setup() {
     var object_for_lua = {};
 
     //check all local server
-    for (let variable in servers["local_servers"]) {
-
-        //Get the object from the locals servers
-        const object = servers["local_servers"][variable];
+    for (let [ip, server] of Object.entries(servers["local_servers"])) {
 
         //Get the open rcon connection
-        const rcon = local_rcons[variable];
+        const rcon = local_rcons[ip];
 
         //Get the lobby key
-        const is_lobby = object.is_lobby;
+        const is_lobby = server.is_lobby;
 
         //Check if someting has goan wrong
-        if (is_lobby == true) { throw new Error('client cant have the lobby server'); }
-
-        //Get the ip:prort of the server
-        const ip = variable;
+        if (is_lobby === true) { throw new Error('client cant have the lobby server'); }
 
         //Set the lobby to false cuase it shood not be true (and could be undefined so shood just be false).
         await rcon.send(`/set_lobby false`);
@@ -157,13 +152,13 @@ async function server_setup() {
 
         //Get all the maps on the server
         result = await rcon.send('/interface local result = {} for i , surface in pairs(game.surfaces) do result[surface.name] = true end return game.table_to_json(result)');
-            //Remove the command complete line
+        //Remove the command complete line
         result = result.split('\n')[0];
         const maps = JSON.parse(result);
 
         //Get all mini_games on the server (these are not all the games the server can run)
         result = await rcon.send('/interface local result = {} for name,mini_game in pairs(mini_games.mini_games)do result[mini_game.map] = name end return game.table_to_json(result)');
-            //Remove the command complete line
+        //Remove the command complete line
         result = result.split('\n')[0];
         const games = JSON.parse(result);
 
@@ -173,16 +168,16 @@ async function server_setup() {
         //Compare the maps with the games where they match put them in games and object_for_lua
         for (let name in games) {
             //Check if the server has the map
-            if (maps[name] != undefined) {
+            if (maps[name]) {
 
                 //Get internal_name name of the game
                 let internal_name = games[name];
 
                 //If the array does not exsit yet create it
-                if (object_for_lua[internal_name] == undefined) { object_for_lua[internal_name] = []; }
+                if (object_for_lua[internal_name] === undefined) { object_for_lua[internal_name] = []; }
 
-                //Push the the variable or the ip:prot of the server (which is top for loop var) to object_for_lua
-                object_for_lua[internal_name].push(variable);
+                //Push the the the ip:prot of the server (which is top for loop var) to object_for_lua
+                object_for_lua[internal_name].push(ip);
 
                 //And push it to game_for_debug so it can printed
                 game_for_debug.push(internal_name);
@@ -193,7 +188,7 @@ async function server_setup() {
         game_for_debug = game_for_debug.join(' and ');
 
         //And print ofc.
-        console.log(`${variable} is running ${game_for_debug}. `);
+        console.log(`${ip} is running ${game_for_debug}. `);
     }
 
     //Send the object to the server so it can tell the lobby what these servers is running.

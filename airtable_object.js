@@ -41,6 +41,7 @@ exports.get_game_id = async function(base, name) {
 };
 
 /**
+    @param {airtable.Base} base - base to look in.
     @param {string} table - table to look in.
     @param {string} colum_for_search - colum you have to value of.
     @param {string} value - the value of colum_for_search.

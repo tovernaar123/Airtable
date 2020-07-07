@@ -15,9 +15,8 @@ async function connect_rcon(port, pw) {
 
 async function start() {
     const locals_rcons = {};
-    for (let variable in servers["local_servers"]) {
-        let object = servers["local_servers"][variable];
-        locals_rcons[variable] = await connect_rcon(object.Rcon_port, object.Rcon_pass);
+    for (let [ip, server] of Object.entries(servers["local_servers"])) {
+        locals_rcons[ip] = await connect_rcon(server.Rcon_port, server.Rcon_pass);
     }
     if (process.env.Is_lobby === 'true') {
         const { init } = require('./server.js');
@@ -33,6 +32,7 @@ async function start() {
 if (require.main === module) {
     start().catch(err => {
         console.error(err);
+        //eslint-disable-next-line no-process-exit
         process.exit(1);
     });
 }

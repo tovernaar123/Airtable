@@ -14,8 +14,8 @@ function resolveToAbsolutePath(path) {
 exports.watch_files = function(servers) {
     const file_events = new events.EventEmitter();
     const directories = [];
-    for (let variable in servers["local_servers"]) {
-        const object = servers["local_servers"][variable];
+    for (let ip of Object.keys(servers["local_servers"])) {
+        const object = servers["local_servers"][ip];
         let dir = resolveToAbsolutePath(object.dir);
         console.log(`Watching for file changes on ${dir}`);
         directories.push(dir);
@@ -25,7 +25,7 @@ exports.watch_files = function(servers) {
     for (let path of directories) {
         fs.watch(path, (event, filename) => {
             if (filename) {
-                if (fsWait) return;
+                if (fsWait) { return; }
                 fsWait = setTimeout(() => {
                     fsWait = false;
                 }, 100);
@@ -34,7 +34,7 @@ exports.watch_files = function(servers) {
                 let object = JSON.parse(data);
                 file_events.emit(object.type, object);
             }
-        });;
+        });
     }
 
     return file_events;

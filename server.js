@@ -17,12 +17,9 @@ const { Started_game, end_game } = require('./airtable.js');
 //server setup
 async function server_setup() {
     let object_for_lua = {};
-    for (let variable in servers["local_servers"]) {
-        //use await cause its still connecting
-        const rcon = local_rcons[variable];
-        const object = servers["local_servers"][variable];
-        const is_lobby = object.is_lobby;
-        const ip = variable;
+    for (let [ip, server] of Object.entries(servers["local_servers"])) {
+        const rcon = local_rcons[ip];
+        const is_lobby = server.is_lobby;
 
         //telling the server if this the lobby
         await rcon.send(`/set_lobby ${is_lobby}`);
@@ -31,9 +28,9 @@ async function server_setup() {
         await rcon.send(`/set_server_address ${ip}`);
 
         //if the server is the lobby log it and continue as the lobby cant have games
-        if (is_lobby == true) {
-            console.log(`${variable} is the lobby. `);
-            object_for_lua['lobby'] = variable;
+        if (is_lobby === true) {
+            console.log(`${ip} is the lobby. `);
+            object_for_lua['lobby'] = ip;
             continue;
         }
 
@@ -42,27 +39,27 @@ async function server_setup() {
         //getting all surface on the server
         result = await rcon.send('/interface local result = {} for i , surface in pairs(game.surfaces) do result[surface.name] = true end return game.table_to_json(result)');
         result = result.split('\n')[0];
-        const json1 = JSON.parse(result);
+        const surfaces = JSON.parse(result);
 
         //getting all mini_games on the server
         result = await rcon.send('/interface local result = {} for name,mini_game in pairs(mini_games.mini_games)do result[mini_game.map] = name end return game.table_to_json(result)');
         result = result2.split('\n')[0];
-        const json2 = JSON.parse(result);
+        const mini_games = JSON.parse(result);
 
         let games = [];
 
         //checking what the server is running by checking the maps against the games
-        for (let name in json2) {
-            if (json1[name] != undefined) {
-                let internal_name = json2[name];
-                if (object_for_lua[internal_name] == undefined) { object_for_lua[internal_name] = []; }
-                object_for_lua[internal_name].push(variable);
+        for (let name of Object.keys(mini_games)) {
+            if (surfaces[name]) {
+                let internal_name = mini_games[name];
+                if (object_for_lua[internal_name] === undefined) { object_for_lua[internal_name] = []; }
+                object_for_lua[internal_name].push(ip);
                 games.push(internal_name);
             }
         }
         //just some printing for debbuging
         games = games.join(' and ');
-        console.log(`${variable} is running ${games}. `);
+        console.log(`${ip} is running ${games}. `);
     }
 
     //return all running servers
@@ -71,7 +68,7 @@ async function server_setup() {
     //Combine result with object_for_lua.
     for (let [key, value] of Object.entries(result)) {
         //If the key is lobby set lobby to the value as push will throw an error.
-        if (key == 'lobby') {
+        if (key === 'lobby') {
             object_for_lua['lobby'] = value;
             continue;
         }
@@ -128,7 +125,7 @@ exports.init = async function(lobby_rcon_, local_rcons_, file_events) {
         console.log(`game arguments are ${JSON.stringify(args)}`);
 
         //Checking if the server is local
-        if (servers["local_servers"][server] != undefined) {
+        if (servers["local_servers"][server]) {
 
             //Join the args to then run /start
             args = args.join(' ');
@@ -181,11 +178,11 @@ exports.init = async function(lobby_rcon_, local_rcons_, file_events) {
             await rcon2.send(`/sc game.print("[color=#FFD700]1st: ${object.Gold} with a score of ${object.Gold_data}.[/color]")`);
 
             //If their is a silver player print it
-            if (object.Silver != undefined) {
+            if (object.Silver !== null) {
                 await rcon2.send(`/sc game.print("[color=#C0C0C0]2nd: ${object.Silver} with a score of ${object.Silver_data}.[/color]")`);
 
                 //If their is a Bronze player print it
-                if (object.Bronze != undefined) {
+                if (object.Bronze !== null) {
                     await rcon2.send(`/sc game.print("[color=#cd7f32]3rd: ${object.Bronze} with a score of ${object.Bronze_data}.[/color]")`);
                 }
             }
@@ -291,9 +288,9 @@ async function ondata(msg, ws) {
                 let rcon = lobby_rcon;
                 let object = data.data;
                 await rcon.send(`/sc game.print("[color=#FFD700]1st: ${object.Gold} with a score of ${object.Gold_data}.[/color]")`);
-                if (object.Silver != undefined) {
+                if (object.Silver !== null) {
                     await rcon.send(`/sc game.print("[color=#C0C0C0]2nd: ${object.Silver} with a score of ${object.Silver_data}.[/color]")`);
-                    if (object.Bronze != undefined) {
+                    if (object.Bronze !== null) {
                         await rcon.send(`/sc game.print("[color=#cd7f32]3rd: ${object.Bronze} with a score of ${object.Bronze_data}.[/color]")`);
                     }
                 }
