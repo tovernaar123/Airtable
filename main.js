@@ -1,38 +1,38 @@
 "use strict";
 
 require('dotenv').config();
-const file_listener = require("./file_listener.js")
+const file_listener = require("./file_listener.js");
 const servers = JSON.parse((process.env.Servers));
 
 const file_events = file_listener.watch_files(servers);
 
-const Rcon = require("rcon-client").Rcon
+const Rcon = require("rcon-client").Rcon;
 async function connect_rcon(port, pw) {
-    const rcon = new Rcon({ host: "localhost", port: port, password: pw })
-    await rcon.connect()
-    return rcon
+    const rcon = new Rcon({ host: "localhost", port: port, password: pw });
+    await rcon.connect();
+    return rcon;
 }
 
 async function start() {
-    const locals_rcons = {}
+    const locals_rcons = {};
     for (let variable in servers["local_servers"]) {
-        let object = servers["local_servers"][variable]
-        locals_rcons[variable] = await connect_rcon(object.Rcon_port, object.Rcon_pass)
+        let object = servers["local_servers"][variable];
+        locals_rcons[variable] = await connect_rcon(object.Rcon_port, object.Rcon_pass);
     }
     if (process.env.Is_lobby === 'true') {
-        const { init } = require('./server.js')
-        const lobby = servers["lobby"]
-        const lobby_rcon = await connect_rcon(lobby.Rcon_port, lobby.Rcon_pass)
-        await init(lobby_rcon, locals_rcons, file_events)
+        const { init } = require('./server.js');
+        const lobby = servers["lobby"];
+        const lobby_rcon = await connect_rcon(lobby.Rcon_port, lobby.Rcon_pass);
+        await init(lobby_rcon, locals_rcons, file_events);
     } else {
-        const { init } = require('./client.js')
-        await init(locals_rcons, file_events)
+        const { init } = require('./client.js');
+        await init(locals_rcons, file_events);
     }
 
 }
 if (require.main === module) {
     start().catch(err => {
         console.error(err);
-        process.exit(1)
+        process.exit(1);
     });
 }

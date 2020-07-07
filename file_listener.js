@@ -13,12 +13,12 @@ function resolveToAbsolutePath(path) {
 
 exports.watch_files = function(servers) {
     const file_events = new events.EventEmitter();
-    const directories = []
+    const directories = [];
     for (let variable in servers["local_servers"]) {
-        const object = servers["local_servers"][variable]
-        var dir = resolveToAbsolutePath(object.dir)
+        const object = servers["local_servers"][variable];
+        var dir = resolveToAbsolutePath(object.dir);
         console.log(`Watching for file changes on ${dir}`);
-        directories.push(dir)
+        directories.push(dir);
     }
 
     let fsWait = false;
@@ -29,25 +29,25 @@ exports.watch_files = function(servers) {
                 fsWait = setTimeout(() => {
                     fsWait = false;
                 }, 100);
-                var data = readfile(filename, path)
-                console.log(data)
-                var object = JSON.parse(data)
+                var data = readfile(filename, path);
+                console.log(data);
+                var object = JSON.parse(data);
                 file_events.emit(object.type, object);
             }
         });;
     }
 
     return file_events;
-}
+};
 
 
 function readfile(filename, dir) {
     try {
         var data = fs.readFileSync(path.join(dir, filename), 'utf8');
-        return data
+        return data;
     } catch (e) {
-        console.error("error when reading file ", e.stack)
-        return 'Error:' + e.stack
+        console.error("error when reading file ", e.stack);
+        return 'Error:' + e.stack;
     }
 
 }

@@ -18,7 +18,7 @@ exports.get_player_id = async function(base, name) {
     let id = records[0].id;
     player_cache.set(name, id);
     return id;
-}
+};
 
 let game_cache = new Map();
 exports.get_game_id = async function(base, name) {
@@ -38,7 +38,7 @@ exports.get_game_id = async function(base, name) {
     let id = records[0].id;
     game_cache.set(name, id);
     return id;
-}
+};
 
 /**
     @param {string} table - table to look in.
@@ -58,4 +58,4 @@ exports.general_lookup = async function(base, table, colum_for_search, value, an
     }
 
     return records[0].fields[answer_column];
-}
+};
