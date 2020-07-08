@@ -13,41 +13,41 @@ function resolveToAbsolutePath(path) {
 
 exports.watch_files = function(servers) {
     const file_events = new events.EventEmitter();
-    const directories = []
-    for (let variable in servers["local_servers"]) {
-        const object = servers["local_servers"][variable]
-        var dir = resolveToAbsolutePath(object.dir)
+    const directories = [];
+    for (let ip of Object.keys(servers["local_servers"])) {
+        const object = servers["local_servers"][ip];
+        let dir = resolveToAbsolutePath(object.dir);
         console.log(`Watching for file changes on ${dir}`);
-        directories.push(dir)
+        directories.push(dir);
     }
 
     let fsWait = false;
-    for (var path of directories) {
+    for (let path of directories) {
         fs.watch(path, (event, filename) => {
             if (filename) {
-                if (fsWait) return;
+                if (fsWait) { return; }
                 fsWait = setTimeout(() => {
                     fsWait = false;
                 }, 100);
-                var data = readfile(filename, path)
-                console.log(data)
-                var object = JSON.parse(data)
+                let data = readfile(filename, path);
+                console.log(data);
+                let object = JSON.parse(data);
                 file_events.emit(object.type, object);
             }
-        });;
+        });
     }
 
     return file_events;
-}
+};
 
 
 function readfile(filename, dir) {
     try {
-        var data = fs.readFileSync(path.join(dir, filename), 'utf8');
-        return data
+        let data = fs.readFileSync(path.join(dir, filename), 'utf8');
+        return data;
     } catch (e) {
-        console.error("error when reading file ", e.stack)
-        return 'Error:' + e.stack
+        console.error("error when reading file ", e.stack);
+        return `Error: ${e.stack}`;
     }
 
 }
