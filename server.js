@@ -50,7 +50,10 @@ async function server_setup() {
         const json2 = JSON.parse(result)
 
         let games = []
-
+        rcon.on('end', async() => {
+            console.log(games)
+        });
+        rcon.on('error', (err) => { console.error(err) });
         //checking what the server is running by checking the maps against the games
         for (let name in json2) {
             if (json1[name] != undefined) {
@@ -104,6 +107,11 @@ exports.init = async function(lobby_rcon_, local_rcons_, file_events) {
     //setting file variables to the parms
     lobby_rcon = await lobby_rcon_
     local_rcons = await local_rcons_
+    lobby_rcon.on('end', async() => {
+        console.log('lobby crashed shutting down')
+        process.exit()
+    });
+    lobby_rcon.on('error', (err) => { console.error(err) });
 
     //starting the server
     await start()
@@ -283,25 +291,56 @@ async function ondata(msg, ws) {
         //set the servers global to object_for_lua
         lobby_rcon.send(`/interface global.servers= game.json_to_table('${json}')`)
         return
-    } else {
+    } else if (data.type === "end_game") {
         //If the game has been ended print who has won in the lobby.
-        if (data.type === "end_game") {
-            //send it 10 sec
-            setTimeout(async function() {
-                let rcon = lobby_rcon
-                let object = data.data
-                await rcon.send("/sc game.print( \"[color=#FFD700]1st: " + object.Gold + " with a score of " + object.Gold_data + ".[/color]\")")
-                if (object.Silver != undefined) {
-                    await rcon.send("/sc game.print( \"[color=#C0C0C0]2nd: " + object.Silver + " with a score of " + object.Silver_data + ".[/color]\")")
-                    if (object.Bronze != undefined) {
-                        await rcon.send("/sc game.print(\"[color=#cd7f32]3rd:" + object.Bronze + " with a score of" + object.Bronze_data + ".[/color]\")")
-                    }
+        //send it 10 sec
+        setTimeout(async function() {
+            let rcon = lobby_rcon
+            let object = data.data
+            await rcon.send("/sc game.print( \"[color=#FFD700]1st: " + object.Gold + " with a score of " + object.Gold_data + ".[/color]\")")
+            if (object.Silver != undefined) {
+                await rcon.send("/sc game.print( \"[color=#C0C0C0]2nd: " + object.Silver + " with a score of " + object.Silver_data + ".[/color]\")")
+                if (object.Bronze != undefined) {
+                    await rcon.send("/sc game.print(\"[color=#cd7f32]3rd:" + object.Bronze + " with a score of" + object.Bronze_data + ".[/color]\")")
                 }
-            }, 10000)
+            }
+        }, 10000)
+    } else if (data.type === "sever_disconnect") {
+        //get the games the server was running 
+        let games = data.data[0]
+
+        //get the ip port of the server 
+        let factorio_server = data.data[1]
+
+        //get all current games
+        let lobby_games = await lobby_rcon.send(`/interface return game.table_to_json(global.servers)`)
+
+        //remove the command complete 
+        lobby_games = JSON.parse(lobby_games.split('\n')[0])
+
+        //loop of all the games
+        for (let game of games) {
+
+            //get all servers running this game
+            let servers = lobby_games[game]
+
+            //loop over all the servers 
+            for (let i in servers) {
+
+                //get the server ip:port
+                let server = servers[i]
+
+                //if its match to ours remove it from the array 
+                if (server === factorio_server) {
+                    servers.splice(i, 1)
+                }
+            }
         }
+
+        //send the object back to the lobby server
+        let json = JSON.stringify(lobby_games)
+        await lobby_rcon.send(`/interface global.servers= game.json_to_table('${json}')`)
     }
-    console.log("got data")
-    console.log(data);
 }
 
 //do not touch funtion just leave it here and all will be good.

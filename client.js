@@ -44,7 +44,6 @@ async function client() {
     }
     let ws = new WebSocket(process.env.url, options);
     ws.on("open", function() {
-        ws.send(JSON.stringify({ "id": "expgaming" }));
         if (reconnecting) {
             clearInterval(interval_token)
         }
@@ -165,10 +164,11 @@ async function server_setup() {
         result = await rcon.send('/interface local result = {} for name,mini_game in pairs(mini_games.mini_games)do result[mini_game.map] = name end return game.table_to_json(result)')
             //Remove the command complete line
         result = result.split('\n')[0]
+        console.log(result)
         const games = JSON.parse(result)
 
         //just for print the games
-        let game_for_debug = []
+        var game_for_crash = []
 
         //Compare the maps with the games where they match put them in games and object_for_lua
         for (let name in games) {
@@ -185,15 +185,13 @@ async function server_setup() {
                 object_for_lua[internal_name].push(variable)
 
                 //And push it to game_for_debug so it can printed
-                game_for_debug.push(internal_name)
+                game_for_crash.push(internal_name)
             }
         }
-
-        //Just put and between the games (cause i am to lazzy to make it a good sentence).
-        game_for_debug = game_for_debug.join(' and ')
-
-        //And print ofc.
-        console.log(`${variable} is running ${game_for_debug}. `)
+        rcon.on('end', async() => {
+            websocket.send(JSON.stringify({ "type": 'sever_disconnect', "data": [game_for_crash, variable] }))
+        });
+        rcon.on('error', (err) => { console.error(err) });
     }
 
     //Send the object to the server so it can tell the lobby what these servers is running.
