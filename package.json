@@ -8,10 +8,11 @@
     "dotenv": "^8.2.0",
     "jsonwebtoken": "^8.5.1",
     "rcon-client": "^4.2.0",
-    "rfdc": "^1.1.4",
     "ws": "^7.3.0"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "eslint": "^7.4.0"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "run": "main.js"

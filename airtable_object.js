@@ -18,7 +18,7 @@ exports.get_player_id = async function(base, name) {
     let id = records[0].id;
     player_cache.set(name, id);
     return id;
-}
+};
 
 let game_cache = new Map();
 exports.get_game_id = async function(base, name) {
@@ -38,9 +38,10 @@ exports.get_game_id = async function(base, name) {
     let id = records[0].id;
     game_cache.set(name, id);
     return id;
-}
+};
 
 /**
+    @param {airtable.Base} base - base to look in.
     @param {string} table - table to look in.
     @param {string} colum_for_search - colum you have to value of.
     @param {string} value - the value of colum_for_search.
@@ -48,7 +49,7 @@ exports.get_game_id = async function(base, name) {
     @returns {any}  the value found.
  */
 exports.general_lookup = async function(base, table, colum_for_search, value, answer_colum) {
-    let records = base(table).select({
+    let records = await base(table).select({
         filterByFormula: `{${colum_for_search}} = '${value}'`,
         maxRecords: 1,
     }).firstPage();
@@ -57,5 +58,5 @@ exports.general_lookup = async function(base, table, colum_for_search, value, an
         return null;
     }
 
-    return records[0].fields[answer_column];
-}
+    return records[0].fields[answer_colum];
+};
