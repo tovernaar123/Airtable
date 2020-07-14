@@ -15,7 +15,7 @@ exports.init = async function(local_rcons_, file_events) {
         let rcon = local_rcons[object.server];
         await rcon.send("/stop_games");
         setTimeout(async function() {
-            await rcon.send("/kill_all");
+            await rcon.send("/kick_all");
         }, 5000);
         websocket.send(JSON.stringify({ "type": "end_game", "data": object }));
     });

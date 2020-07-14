@@ -174,7 +174,7 @@ exports.init = async function(lobby_rcon_, local_rcons_, file_events) {
         //In 10 sec kick all players
         setTimeout(async function() {
 
-            //The command is kill_all
+            //The command is kick_all
             await rcon.send("/kick_all");
         }, 10000);
 
@@ -250,7 +250,6 @@ function authenticate(request) {
 async function server_disconnect(data) {
     //get the games the server was running
     let games = data.data[0];
-
     //get the ip port of the server
     let factorio_server = data.data[1];
 
@@ -262,15 +261,15 @@ async function server_disconnect(data) {
 
     //loop of all the games
     for (let game of games) {
-
         //get all servers running this game
         let servers_array = lobby_games[game];
-
         //loop over all the servers
-        for (let server of Object.keys(servers_array)) {
+        for (let index of Object.keys(servers_array)) {
+            let server = servers_array[index];
             //if its match to ours remove it from the array
             if (server === factorio_server) {
-                servers.splice(i, 1);
+                servers_array.splice(index, 1);
+                if (servers_array.length === 0) { delete lobby_games[game]; }
             }
         }
     }
@@ -295,17 +294,18 @@ async function ondata(msg, ws) {
     //check the key type of data to see what action to take
     if (data.type === "server_object") {
         //if type is server_object it means that the client has send the mini_games its running
-        let object_for_lua = data.data;
+        let factorio_servers = data.data;
 
         //get the all the current games to combine with the games of this client
-        let result = await lobby_rcon.send(`/interface return game.table_to_json(global.servers)`);
-        result = JSON.parse(result.split('\n')[0]);
+        let object_for_lua = await lobby_rcon.send(`/interface return game.table_to_json(global.servers)`);
+        object_for_lua = JSON.parse(object_for_lua.split('\n')[0]);
         for (let [key, server_ips] of Object.entries(data.data)) {
             server_ips.map(ip => server_ip_to_socket.set(ip, ws));
         }
         //combine both of the objects into 1
-        for (let [key, value] of Object.entries(result)) {
+        for (let [key, value] of Object.entries(factorio_servers)) {
             if (object_for_lua[key]) {
+                console.log(object_for_lua[key]);
                 object_for_lua[key].push(...value);
             } else {
                 object_for_lua[key] = value;
@@ -339,6 +339,7 @@ async function ondata(msg, ws) {
     } else if (data.type === "sever_disconnect") {
         server_disconnect(data);
     }
+    console.log(data);
 }
 
 //do not touch funtion just leave it here and all will be good.
