@@ -1,34 +1,41 @@
 "use strict";
 require('dotenv').config();
-const Rcon = require("rcon-client").Rcon;
+const fs = require('fs').promises;
 
-const file_listener = require("./file_listener.js");
-const init = require(process.env.Is_lobby === 'true' ? "./server.js" : "./client.js");
+/*eslint-disable no-process-env*/
+const config = {
+    airtable_token: process.env.Api_key,
+    airtable_base: process.env.Base_key,
+    is_server: process.env.Is_lobby.toLowerCase() === 'true',
+    servers_file: process.env.Servers,
 
+    //Server specific configs
+    server_port: process.env.port,
+    ws_secret: process.env.secret,
+    tls_key_file: process.env.key,
+    tls_cert_file: process.env.cert, //May also be specified on the client
 
-async function connect_rcon(port, pw) {
-    const rcon = new Rcon({ host: "localhost", port: port, password: pw });
-    await rcon.connect();
-    return rcon;
-}
+    //Client specific configs
+    ws_token: process.env.token,
+    ws_url: process.env.url,
+};
+/*eslint-enable no-process-env*/
+
+const side = require(config.is_server ? "./server.js" : "./client.js");
+const file_listener = require('./file_listener.js');
+const rcon_connector = require('./rcon_connector.js');
+const Airtable = require('airtable');
+
 
 async function start() {
-    const servers = JSON.parse((process.env.Servers));
+    const content = await fs.readFile(config.servers_file);
+    const servers = new Map(Object.entries(JSON.parse(content)));
+    const base = new Airtable({ apiKey: config.airtable_token }).base(config.airtable_base);
+
     const file_events = file_listener.watch_files(servers);
+    const rcon_events = rcon_connector.connect_to_servers(servers);
 
-    const locals_rcons = {};
-    for (let [ip, server] of Object.entries(servers["local_servers"])) {
-        locals_rcons[ip] = await connect_rcon(server.Rcon_port, server.Rcon_pass);
-    }
-
-    if (process.env.Is_lobby === 'true') {
-        const lobby = servers["lobby"];
-        const lobby_rcon = await connect_rcon(lobby.Rcon_port, lobby.Rcon_pass);
-        await init(lobby_rcon, locals_rcons, file_events);
-
-    } else {
-        await init(locals_rcons, file_events);
-    }
+    await side.init(config, servers, base, file_events, rcon_events);
 }
 
 if (require.main === module) {

@@ -1,238 +1,264 @@
-/*eslint-disable max-len */
 "use strict";
-
-let servers = JSON.parse((process.env.Servers));
 const fs = require("fs").promises;
 const https = require("https");
-//const util = require("util");
-
 const jwt = require("jsonwebtoken");
 const WebSocket = require("ws");
-let server_ip_to_socket = new Map();
-let secret;
-let lobby_rcon;
-let local_rcons;
-let id;
+
 const { started_game, end_game } = require('./airtable.js');
 
-//server setup
-async function server_setup() {
-    let object_for_lua = {};
-    for (let [ip, server] of Object.entries(servers["local_servers"])) {
-        const rcon = local_rcons[ip];
-        const is_lobby = server.is_lobby;
 
-        //telling the server if this the lobby
-        await rcon.send(`/set_lobby ${is_lobby}`);
-
-        //telling the server its own ip
-        await rcon.send(`/set_server_address ${ip}`);
-
-        //if the server is the lobby log it and continue as the lobby cant have games
-        if (is_lobby === true) {
-            console.log(`${ip} is the lobby. `);
-            object_for_lua['lobby'] = ip;
-            continue;
-        }
-
-        let result;
-
-        //getting all surface on the server
-        result = await rcon.send('/interface local result = {} for i , surface in pairs(game.surfaces) do result[surface.name] = true end return game.table_to_json(result)');
-        result = result.split('\n')[0];
-        const surfaces = JSON.parse(result);
-
-        //getting all mini_games on the server
-        result = await rcon.send('/interface local result = {} for name,mini_game in pairs(mini_games.mini_games)do result[mini_game.map] = name end return game.table_to_json(result)');
-        result = result2.split('\n')[0];
-        const mini_games = JSON.parse(result);
-
-        let games = [];
-        rcon.on('end', () => {
-            console.log(games);
-        });
-        rcon.on('error', (err) => { console.error(err); });
-        //checking what the server is running by checking the maps against the games
-        for (let name of Object.keys(mini_games)) {
-            if (surfaces[name]) {
-                let internal_name = mini_games[name];
-                if (object_for_lua[internal_name] === undefined) { object_for_lua[internal_name] = []; }
-                object_for_lua[internal_name].push(ip);
-                games.push(internal_name);
-            }
-        }
-        //just some printing for debbuging
-        games = games.join(' and ');
-        console.log(`${ip} is running ${games}. `);
-    }
-
-    //return all running servers
-    const result = lobby_rcon.send(`/interface return game.table_to_json(global.servers)`);
-
-    //Combine result with object_for_lua.
-    for (let [key, value] of Object.entries(result)) {
-        //If the key is lobby set lobby to the value as push will throw an error.
-        if (key === 'lobby') {
-            object_for_lua['lobby'] = value;
-            continue;
-        }
-        //If the key is their add the value
-        if (object_for_lua[key]) {
-
-            //All keys (beside lobby ) are an array so we can push the value in to this array.
-            object_for_lua[key].push(...value);
-        } else {
-            //if key is not their just set it to value
-            object_for_lua[key] = value;
-        }
-    }
-
-    //The lua can only read Json so lets make it json.
-    let json = JSON.stringify(object_for_lua);
-
-    //Wait for the server to send the object
-    await lobby_rcon.send(`/interface global.servers= game.json_to_table('${json}')`);
-    console.log(object_for_lua);
-}
-
-
-
-//function called by main where lobby_rcon_ is the open rcon to the lobby and local_rcons_ is all the rcon connections including the lobby.
-//file_events is the events the run when the files change
-exports.init = async function(lobby_rcon_, local_rcons_, file_events) {
+let socket_to_client_data = new Map();
+let lobby_server;
+let lobby_ip;
+let servers;
+exports.init = async function(config, init_servers, base, file_events, rcon_events) {
     console.log("running as server");
+    servers = init_servers;
 
-    //setting file variables to the parms
-    lobby_rcon = await lobby_rcon_;
-    local_rcons = await local_rcons_;
-    lobby_rcon.on('end', () => {
-        console.log('lobby crashed shutting down');
-        //eslint-disable-next-line no-process-exit
-        process.exit();
+    //Find the lobby server among the local servers.
+    let lobby_servers = [];
+    for (let [ip, server] of servers) {
+        if (server.is_lobby) {
+            lobby_servers.push([ip, server]);
+        }
+    }
+    if (lobby_servers.length !== 1) {
+        throw new Error(`Excepted there to be exactly one lobby server but got ${lobby_servers.length}`);
+    }
+    [lobby_ip, lobby_server] = lobby_servers[0];
+
+    rcon_events.on("connect", function(ip, server) {
+        server_connected(ip, server).catch(err => {
+            console.log(`Error setting up rcon connection to ${ip}:`, err);
+        });
     });
-    lobby_rcon.on('error', (err) => { console.error(err); });
 
-    //starting the server
-    await start();
-
-    //server setup
-    await server_setup();
+    rcon_events.on("close", function(ip, server) {
+        server_disconnected(ip, server);
+        console.log(`lost rcon connection with ${ip}`);
+    });
 
     //when the Started_game game event is run in file_listener this function will run
-    file_events.on("Started_game", async function(object) {
+    file_events.on("Started_game", async function(server, object) {
 
         //Setting the airtable things (this returns an id which the other server needs)
-        id = await started_game(object);
+        let record_id = await started_game(base, object);
 
         //Adding the name to beiging of the args
         object.arguments.unshift(object.name);
 
         //setting the args and server parms
-        const args = object.arguments;
-        const server = object.server;
+        const args = object.arguments.join(' ');
+        const ip = object.server;
 
         //log the argmunts
         console.log(`game arguments are ${JSON.stringify(args)}`);
 
         //Checking if the server is local
-        if (servers["local_servers"][server]) {
-
-            //Join the args to then run /start
-            args = args.join(' ');
-
-            //get the open rcon connection
-            let rcon2 = local_rcons[server];
+        if (servers.has(ip)) {
+            let target_server = servers.get(ip);
+            target_server.record_id = record_id;
 
             //wait 30 sec the start the game
             setTimeout(async function() {
-                await rcon2.send(`/start ${args}`);
+                if (target_server.rcon.authenticated) {
+                    await target_server.rcon.send(`/start ${args}`);
+
+                } else {
+                    console.log(`Received start for unavailable server ${ip}`);
+                }
             }, 30000);
+
         } else {
             //Get the socket of the server
-            let socket = server_ip_to_socket.get(server);
+            let ws;
+            for (let [client_ws, client_data] of socket_to_client_data) {
+                if (client_data.servers[ip]) {
+                    ws = client_ws;
+                    break;
+                }
+            }
 
+            //If the socket was found, send start game message to it
+            if (ws) {
+                ws.send(JSON.stringify({
+                    "type": "start_game",
+                    "args": args,
+                    "server": ip,
+                    "record_id": record_id,
+                }));
 
-            //If no socket error
-            if (socket === undefined) { console.error("cant find server"); return; }
-
-            //If their is a socket send the socket the args and the airtable_id
-            socket.send(JSON.stringify({ "type": "start", "args": args, "sever": server, "id": id }));
+            } else {
+                console.log(`Received start for unavailable server ${ip}`);
+            }
         }
     });
-    file_events.on("end_game", async function(object) {
-        await end_game(object, id);
 
-        //Geting server ip
-        const server = object.server;
+    file_events.on("end_game", async function(server, object) {
+        if (server.record_id) {
+            let record_id = server.record_id;
+            server.record_id = null;
+            await end_game(base, object, record_id);
 
-        //Getting open rcon connection
-        let rcon = local_rcons[server];
+        } else {
+            console.log(`Received end_game, but missing airtable record_id`);
+            console.log(JSON.stringify(object));
+        }
 
         //Send the stop command
-        await rcon.send("/stop_games");
+        await server.rcon.send("/stop_games");
 
         //In 10 sec kick all players
         setTimeout(async function() {
-
-            //The command is kick_all
-            await rcon.send("/kick_all");
+            await server.rcon.send("/kick_all");
         }, 10000);
 
         //In 10 sec also print all the scores
-        setTimeout(async function() {
-
-            //Get the lobby rcon
-            let rcon2 = lobby_rcon;
-
-            //Print the gold data and the player name
-            await rcon2.send(`/sc game.print("[color=#FFD700]1st: ${object.Gold} with a score of ${object.Gold_data}.[/color]")`);
-
-            //If their is a silver player print it
-            if (object.Silver !== undefined) {
-                await rcon2.send(`/sc game.print("[color=#C0C0C0]2nd: ${object.Silver} with a score of ${object.Silver_data}.[/color]")`);
-
-                //If their is a Bronze player print it
-                if (object.Bronze !== undefined) {
-                    await rcon2.send(`/sc game.print("[color=#cd7f32]3rd: ${object.Bronze} with a score of ${object.Bronze_data}.[/color]")`);
-                }
-            }
+        setTimeout(function() {
+            print_winners(object).catch(err => {
+                console.log("error printing winners for local game", err);
+            });
         }, 10000);
     });
 
+    //start the HTTPS/WebSocket server
+    await start_server(
+        config.server_port,
+        config.ws_secret,
+        config.tls_key_file,
+        config.tls_cert_file,
+    );
 };
-//Creating a new server and setting the event handlers.
+
+//Print the 1st, 2nd and 3rd place for a game on the lobby server
+async function print_winners(object) {
+    async function print(color, pos, player, score) {
+        await lobby_server.rcon.send(
+            `/sc game.print("[color=${color}]${pos}: ${player} with a score of ${score}.[/color]")`
+        );
+    }
+
+    //Print gold, silver and bronze positions if they exist
+    if (object.Gold) { await print('#FFD700', "1st", object.Gold, object.Gold_data); }
+    if (object.Silver) { await print('#C0C0C0', "2nd", object.Silver, object.Silver_data); }
+    if (object.Bronze) { await print('#cd7f32', "3rd", object.Bronze, object.Bronze_data); }
+}
+
+//server setup
+async function server_connected(ip, server) {
+    //telling the server if this the lobby
+    await server.rcon.send(`/set_lobby ${server.is_lobby}`);
+
+    //telling the server its own ip
+    await server.rcon.send(`/set_server_address ${ip}`);
+
+    //if the server is the lobby log it and continue as the lobby cant have games
+    if (server.is_lobby) {
+        console.log(`${ip} is the lobby. `);
+
+    } else {
+        //Set the ip of the lobby
+        await server.rcon.send(`/interface global.servers = {lobby = '${lobby_ip}'}`);
+
+        //Get all mini games the server can run
+        let result = await server.rcon.send(`/interface
+            local result = {}
+            for name, mini_game in pairs(mini_games.mini_games) do
+                if game.surfaces[mini_game.map] then
+                    result[name] = true
+                end
+            end
+            return game.table_to_json(result)`.replace(/\r?\n +/g, ' ')
+        );
+
+        //Remove the command complete line
+        result = result.split('\n')[0];
+        server.games = Object.keys(JSON.parse(result));
+    }
+
+    server.online = true;
+    await update_lobby_server_list();
+}
+
+async function server_disconnected(ip, server) {
+    server.online = false;
+    await update_lobby_server_list();
+}
+
+async function update_lobby_server_list() {
+    //Skip update if connection to lobby server is offline.
+    if (!lobby_server.rcon.authenticated) {
+        return;
+    }
+
+    let server_data = {
+        lobby: lobby_ip,
+    };
+
+    //Add games for local servers.
+    for (let [ip, server] of servers) {
+        if (server.online) {
+            for (let game of server.games || []) {
+                (server_data[game] || (server_data[game] = [])).push(ip);
+            }
+        }
+    }
+
+    //Add games for remote servers.
+    for (let client_data of socket_to_client_data.values()) {
+        for (let [ip, server] of Object.entries(client_data.servers)) {
+            for (let game of server.games) {
+                (server_data[game] || (server_data[game] = [])).push(ip);
+            }
+        }
+    }
+
+    //Update servers on the lobby server.
+    await lobby_server.rcon.send(`/interface global.servers = game.json_to_table('${JSON.stringify(server_data)}')`);
+}
+
+//Create WebSocket server and set up event handlers for it.
 const wss = new WebSocket.Server({ noServer: true });
 wss.on("connection", function(ws, request) {
     //Print the ip of the new connetion.
     console.log(`Received connection from ${request.socket.remoteAddress}`);
 
-    //Send back to the client that everything has worked.
-    ws.send(JSON.stringify({ "type": "connected" }));
+    let client_data = {
+        servers: {},
+    };
 
-    //Run ondata when data comes in
-    ws.on("message", function(msg) {
-        ondata(msg, ws);
+    socket_to_client_data.set(ws, client_data);
+
+    //Signal the connection has been established and send lobby ip
+    ws.send(JSON.stringify({
+        "type": "connected",
+        "lobby_ip": lobby_ip,
+    }));
+
+    ws.on("message", function(message) {
+        on_message(client_data, JSON.parse(message)).catch(err => {
+            console.log("Error handling message", err);
+        });
     });
 
     //When the connection is closed print this.
     ws.on("close", function(code, reason) {
         console.log(`Connection from ${request.socket.remoteAddress} closed`);
-        for (let [server_ip, socket] of server_ip_to_socket) {
-            if (socket === ws) {
-                server_ip_to_socket.delete(server_ip);
-            }
-        }
+        socket_to_client_data.delete(ws);
+
+        update_lobby_server_list().catch(err => {
+            console.log("Error during ws close:", err);
+        });
     });
 
     //Making sure and error does not crash the script
     ws.on("error", function(error) {
         console.error(error);
     });
-
 });
 
 //Function to see if the client has the right token.
-function authenticate(request) {
+function authenticate(request, secret) {
     let token = request.headers["authorization"];
     if (!token) {
         return false;
@@ -247,116 +273,41 @@ function authenticate(request) {
 
     return true;
 }
-async function server_disconnect(data) {
-    //get the games the server was running
-    let games = data.data[0];
-    //get the ip port of the server
-    let factorio_server = data.data[1];
-
-    //get all current games
-    let lobby_games = await lobby_rcon.send(`/interface return game.table_to_json(global.servers)`);
-
-    //remove the command complete
-    lobby_games = JSON.parse(lobby_games.split('\n')[0]);
-
-    //loop of all the games
-    for (let game of games) {
-        //get all servers running this game
-        let servers_array = lobby_games[game];
-        //loop over all the servers
-        for (let index of Object.keys(servers_array)) {
-            let server = servers_array[index];
-            //if its match to ours remove it from the array
-            if (server === factorio_server) {
-                servers_array.splice(index, 1);
-                if (servers_array.length === 0) { delete lobby_games[game]; }
-            }
-        }
-    }
-    //send the object back to the lobby server
-    let json = JSON.stringify(lobby_games);
-    await lobby_rcon.send(`/interface global.servers= game.json_to_table('${json}')`);
-}
 
 
+//Invoked when a message is received from a client
+async function on_message(client_data, message) {
+    console.log(`data recieved: ${JSON.stringify(message, null, 4)}`);
 
-//Function ran when data is send to the server
-async function ondata(msg, ws) {
-    let data;
+    //Check the key type of data to see what action to take
+    if (message.type === "server_list") {
+        client_data.servers = message.servers;
+        await update_lobby_server_list();
 
-    //try decode data to json
-    try {
-        data = JSON.parse(msg);
-    } catch (e) {
-        console.error(e);
-    }
-
-    //check the key type of data to see what action to take
-    if (data.type === "server_object") {
-        //if type is server_object it means that the client has send the mini_games its running
-        let factorio_servers = data.data;
-
-        //get the all the current games to combine with the games of this client
-        let object_for_lua = await lobby_rcon.send(`/interface return game.table_to_json(global.servers)`);
-        object_for_lua = JSON.parse(object_for_lua.split('\n')[0]);
-        for (let [key, server_ips] of Object.entries(data.data)) {
-            server_ips.map(ip => server_ip_to_socket.set(ip, ws));
-        }
-        //combine both of the objects into 1
-        for (let [key, value] of Object.entries(factorio_servers)) {
-            if (object_for_lua[key]) {
-                console.log(object_for_lua[key]);
-                object_for_lua[key].push(...value);
-            } else {
-                object_for_lua[key] = value;
-            }
-        }
-        console.log(object_for_lua);
-
-        //reply back to the client the lobby ip:port
-        let json = JSON.stringify(object_for_lua);
-        let json2 = {};
-        json2.type = 'lobby_set';
-        json2.data = object_for_lua.lobby;
-        ws.send(JSON.stringify(json2));
-
-        //set the servers global to object_for_lua
-        lobby_rcon.send(`/interface global.servers= game.json_to_table('${json}')`);
-    } else if (data.type === "end_game") {
+    } else if (message.type === "end_game") {
         //If the game has been ended print who has won in the lobby.
         //send it 10 sec
-        setTimeout(async function() {
-            let rcon = lobby_rcon;
-            let object = data.data;
-            await rcon.send(`/sc game.print( "[color=#FFD700]1st: ${object.Gold} with a score of ${object.Gold_data}.[/color]")`);
-            if (object.Silver !== undefined) {
-                await rcon.send(`/sc game.print( "[color=#C0C0C0]2nd: ${object.Silver} with a score of ${object.Silver_data}.[/color]")`);
-                if (object.Bronze !== undefined) {
-                    await rcon.send(`/sc game.print("[color=#cd7f32]3rd:${object.Bronze} with a score of${object.Bronze_data}.[/color]")`);
-                }
-            }
+        setTimeout(function() {
+            print_winners(message.data).catch(err => {
+                console.log("error printing winners for remote game", err);
+            });
         }, 10000);
-    } else if (data.type === "sever_disconnect") {
-        server_disconnect(data);
     }
-    console.log(data);
 }
 
-//do not touch funtion just leave it here and all will be good.
-async function start() {
-    //let bytes = await util.promisify(crypto.randomBytes)(256);
-    //bytes.toString("base64")
-    //token: jwt.sign({}, bytes)
+//Start https server
+async function start_server(port, secret, key_file, cert_file) {
+    //Load JWT secret
+    secret = Buffer.from(secret, "base64");
 
-    //Magic code dont touch (dont fix it if it aint broke).
-    secret = Buffer.from(process.env.secret, "base64");
     let server = https.createServer({
-        key: await fs.readFile(process.env.key),
-        cert: await fs.readFile(process.env.cert),
+        key: await fs.readFile(key_file),
+        cert: await fs.readFile(cert_file),
     });
 
+    //Handle WebSocket connections
     server.on("upgrade", function(request, socket, head) {
-        if (!authenticate(request)) {
+        if (!authenticate(request, secret)) {
             socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
             socket.destroy();
             return;
@@ -367,11 +318,12 @@ async function start() {
         });
     });
 
+    //Catch possible errors listening on port
     await new Promise((resolve, reject) => {
         server.on("error", reject);
-        server.listen(process.env.port, "0.0.0.0", () => {
+        server.listen(port, "0.0.0.0", () => {
             server.off("error", reject);
-            console.log(`listening on ${process.env.port}`);
+            console.log(`listening on ${port}`);
             resolve();
         });
     });

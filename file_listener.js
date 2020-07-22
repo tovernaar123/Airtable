@@ -7,6 +7,7 @@ const path = require('path');
 
 function resolveToAbsolutePath(file_path) {
     return file_path.replace(/%([^%]+)%/g, function(_, key) {
+        //eslint-disable-next-line no-process-env
         return process.env[key];
     });
 }
@@ -14,43 +15,23 @@ function resolveToAbsolutePath(file_path) {
 exports.watch_files = function(servers) {
     const file_events = new events.EventEmitter();
     const directories = [];
-    for (let ip of Object.keys(servers["local_servers"])) {
-        const object = servers["local_servers"][ip];
-        let dir = resolveToAbsolutePath(object.dir);
+    for (let [ip, server] of servers) {
+        let dir = resolveToAbsolutePath(server.dir);
         console.log(`Watching for file changes on ${dir}`);
-        directories.push(dir);
-    }
 
-    let fsWait = false;
-    function watch_file(file_path) {
-        fs.watch(file_path, (_event, filename) => {
-            if (filename) {
-                if (fsWait) { return; }
-                fsWait = setTimeout(() => {
-                    fsWait = false;
-                }, 100);
-                let data = readfile(filename, file_path);
-                let object = JSON.parse(data);
-                file_events.emit(object.type, object);
+        fs.watch(dir, (event, filename) => {
+            if (event !== 'change' || !filename) {
+                return;
             }
+
+            fs.promises.readFile(path.join(dir, filename)).then(content => {
+                let object = JSON.parse(content);
+                file_events.emit(object.type, server, object);
+            }).catch(err => {
+                console.error(`Error reading ${filename} for ${ip}:`, err);
+            });
         });
-    }
-    for (let file_path of directories) {
-        watch_file(file_path);
     }
 
     return file_events;
 };
-
-
-function readfile(filename, dir) {
-    try {
-        //eslint-disable-next-line no-sync
-        let data = fs.readFileSync(path.join(dir, filename), 'utf8');
-        return data;
-    } catch (e) {
-        console.error("error when reading file ", e.stack);
-        return `Error: ${e.stack}`;
-    }
-
-}
