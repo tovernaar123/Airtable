@@ -3,7 +3,7 @@
 const events = require('events');
 const fs = require('fs');
 const path = require('path');
-
+let file_events;
 
 function resolveToAbsolutePath(file_path) {
     return file_path.replace(/%([^%]+)%/g, function(_, key) {
@@ -12,7 +12,7 @@ function resolveToAbsolutePath(file_path) {
 }
 
 exports.watch_files = function(servers) {
-    const file_events = new events.EventEmitter();
+    file_events = new events.EventEmitter();
     const directories = [];
     for (let ip of Object.keys(servers["local_servers"])) {
         const object = servers["local_servers"][ip];
@@ -21,17 +21,10 @@ exports.watch_files = function(servers) {
         directories.push(dir);
     }
 
-    let fsWait = false;
     function watch_file(file_path) {
-        fs.watch(file_path, (_event, filename) => {
+        fs.watch(file_path, (event, filename) => {
             if (filename) {
-                if (fsWait) { return; }
-                fsWait = setTimeout(() => {
-                    fsWait = false;
-                }, 100);
-                let data = readfile(filename, file_path);
-                let object = JSON.parse(data);
-                file_events.emit(object.type, object);
+                readfile(filename, file_path);
             }
         });
     }
@@ -45,8 +38,11 @@ exports.watch_files = function(servers) {
 
 function readfile(filename, dir) {
     try {
-        //eslint-disable-next-line no-sync
-        let data = fs.readFileSync(path.join(dir, filename), 'utf8');
+        fs.readFile(path.join(dir, filename), 'utf8', (err, data) => {
+            if (err) { throw err; };
+            let object = JSON.parse(data);
+            file_events.emit(object.type, object);
+        });
         return data;
     } catch (e) {
         console.error("error when reading file ", e.stack);

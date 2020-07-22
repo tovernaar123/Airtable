@@ -166,7 +166,7 @@ async function server_setup() {
         result = result.split('\n')[0];
         const games = JSON.parse(result);
 
-        //just for print the games
+        //an array for when the games crashes
         let game_for_crash = [];
 
         //Compare the maps with the games where they match put them in games and object_for_lua
@@ -183,7 +183,7 @@ async function server_setup() {
                 //Push the the the ip:prot of the server (which is top for loop var) to object_for_lua
                 object_for_lua[internal_name].push(ip);
 
-                //And push it to game_for_debug so it can printed
+                //And push it to game_for_debug so it can used
                 game_for_crash.push(internal_name);
             }
         }
