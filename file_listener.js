@@ -19,20 +19,27 @@ exports.watch_files = function(servers) {
         let dir = resolveToAbsolutePath(server.dir);
         console.log(`Watching for file changes on ${dir}`);
 
+        let timeout = false;
+        //Eslint doesn't seem to understand variable scoping :/
+        //eslint-disable-next-line no-loop-func
         fs.watch(dir, (event, filename) => {
-            if (event !== 'change' || !filename) {
+            if (timeout || event !== 'change' || !filename) {
                 return;
             }
 
-            fs.promises.readFile(path.join(dir, filename)).then(content => {
-                let object = JSON.parse(content);
-                if (!file_events.emit(object.type, server, object)) {
-                    console.log(`Warning: Unhandled file event ${object.type}`);
-                    console.log(object);
-                }
-            }).catch(err => {
-                console.error(`Error reading ${filename} for ${ip}:`, err);
-            });
+            timout = true;
+            setTimeout(() => {
+                timeout = false;
+                fs.promises.readFile(path.join(dir, filename)).then(content => {
+                    let object = JSON.parse(content);
+                    if (!file_events.emit(object.type, server, object)) {
+                        console.log(`Warning: Unhandled file event ${object.type}`);
+                        console.log(object);
+                    }
+                }).catch(err => {
+                    console.error(`Error reading ${filename} for ${ip}:`, err);
+                });
+            }, 150);
         });
     }
 
