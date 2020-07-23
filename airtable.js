@@ -1,40 +1,78 @@
 "use strict";
-const airtable = require("./airtable_object.js");
-
-const Airtable = require('airtable');
-const base = new Airtable({ apiKey: process.env.Api_key }).base(process.env.Base_key);
 
 
-exports.Started_game = async function(object) {
+//Get the id for the record of the player by the given name in the Player Data table
+let player_cache = new Map();
+async function get_player_id(base, name) {
+    if (player_cache.has(name)) {
+        return player_cache.get(name);
+    }
+
+    let records = await base('Player Data').select({
+        filterByFormula: `{Player Name} = '${name}'`,
+        maxRecords: 1,
+    }).firstPage();
+
+    if (!records.length) {
+        return null;
+    }
+
+    let id = records[0].id;
+    player_cache.set(name, id);
+    return id;
+};
+
+//Get the id for the record of the game by the given name in the Game Internals table
+let game_cache = new Map();
+async function get_game_id(base, name) {
+    if (game_cache.has(name)) {
+        return game_cache.get(name);
+    }
+
+    let records = await base('Game Internals').select({
+        filterByFormula: `{Name} = '${name}'`,
+        maxRecords: 1,
+    }).firstPage();
+
+    if (!records.length) {
+        return null;
+    }
+
+    let id = records[0].id;
+    game_cache.set(name, id);
+    return id;
+};
+
+exports.started_game = async function(base, object) {
     let fields = {};
     fields["Players Present"] = [];
     for (let player of object.players) {
-        let player_id = await airtable.get_player_id(base, player);
+        let player_id = await get_player_id(base, player);
         if (player_id) {
             fields["Players Present"].push(player_id);
         }
     }
     fields["Time Started"] = new Date().toISOString();
-    fields["Game"] = [await airtable.get_game_id(base, object.name)];
+    fields["Game"] = [await get_game_id(base, object.name)];
     console.log(`game starting with ${JSON.stringify(fields)} as fields`);
     const created = await base('Scoring Data').create(fields);
     return created.id;
 };
 
-exports.end_game = async function(object, record_id) {
-    let fields = {}
+exports.end_game = async function(base, object, record_id) {
+    let fields = {};
     if (object.Gold) {
-        let player = await airtable.get_player_id(base, object.Gold);
+        let player = await get_player_id(base, object.Gold);
         fields["Gold Player"] = player ? [player] : [];
         fields["Gold Data"] = object.Gold_data;
     }
     if (object.Silver) {
-        let player = await airtable.get_player_id(base, object.Silver);
+        let player = await get_player_id(base, object.Silver);
         fields["Silver Player"] = player ? [player] : [];
         fields["Silver Data"] = object.Silver_data;
     }
     if (object.Bronze) {
-        let player = await airtable.get_player_id(base, object.Bronze);
+        let player = await get_player_id(base, object.Bronze);
         fields["Bronze Player"] = player ? [player] : [];
         fields["Bronze Data"] = object.Bronze_data;
     }

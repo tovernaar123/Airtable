@@ -9,13 +9,12 @@ module.exports = {
         "ecmaVersion": 11,
     },
 
-    "overrides": [
-        {
-            "files": ["test/**/*.js"],
-            "env": {
-                "mocha": "true",
-            },
+    "overrides": [{
+        "files": ["test/**/*.js"],
+        "env": {
+            "mocha": "true",
         },
+    },
     ],
 
     "rules": {
@@ -78,7 +77,7 @@ module.exports = {
         "key-spacing": "error",
         "keyword-spacing": "warn",
         "line-comment-position": "off",
-        "linebreak-style": ["error", "unix"],
+        //"linebreak-style": ["error", "unix"],
         "lines-around-comment": "off",
         "lines-around-directive": "off",
         "lines-between-class-members": ["error", "always"],
@@ -151,7 +150,7 @@ module.exports = {
         "no-param-reassign": "off",
         "no-path-concat": "error",
         "no-plusplus": ["warn", { "allowForLoopAfterthoughts": true }],
-        "no-process-env": "off",
+        "no-process-env": "error",
         "no-process-exit": "warn",
         "no-proto": "error",
         "no-restricted-exports": "error",
@@ -216,7 +215,7 @@ module.exports = {
         "quote-props": "off",
         "quotes": "off",
         "radix": ["error", "always"],
-        "require-atomic-updates": "warn",
+        "require-atomic-updates": "off",
         "require-await": "warn",
         "require-jsdoc": "off",
         "require-unicode-regexp": "off",
