@@ -67,9 +67,6 @@ async function server_connected(ip, server) {
         await server.rcon.send(`/interface global.servers = {lobby = '${lobby_ip}'}`);
     }
 
-    //Set the ip:port of the server so the server know who it is.
-    await server.rcon.send(`/set_server_address ${ip}`);
-
     //Get all mini games the server can run
     let result = await server.rcon.send(`/interface
         local result = {}

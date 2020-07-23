@@ -149,9 +149,6 @@ async function server_connected(ip, server) {
     //telling the server if this the lobby
     await server.rcon.send(`/set_lobby ${server.is_lobby}`);
 
-    //telling the server its own ip
-    await server.rcon.send(`/set_server_address ${ip}`);
-
     //if the server is the lobby log it and continue as the lobby cant have games
     if (server.is_lobby) {
         console.log(`${ip} is the lobby. `);
