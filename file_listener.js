@@ -26,7 +26,10 @@ exports.watch_files = function(servers) {
 
             fs.promises.readFile(path.join(dir, filename)).then(content => {
                 let object = JSON.parse(content);
-                file_events.emit(object.type, server, object);
+                if (!file_events.emit(object.type, server, object)) {
+                    console.log(`Warning: Unhandled file event ${object.type}`);
+                    console.log(object);
+                }
             }).catch(err => {
                 console.error(`Error reading ${filename} for ${ip}:`, err);
             });
