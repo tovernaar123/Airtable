@@ -42,6 +42,5 @@ exports.watch_files = function(servers) {
             }, 150);
         });
     }
-
     return file_events;
 };

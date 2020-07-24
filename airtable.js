@@ -46,19 +46,20 @@ async function get_game_id(base, name) {
 exports.started_game = async function(base, object) {
     let fields = {};
     fields["Players Present"] = [];
-    for (let player of object.players) {
-        let player_id = await get_player_id(base, player);
-        if (player_id) {
-            fields["Players Present"].push(player_id);
-        }
-    }
     fields["Time Started"] = new Date().toISOString();
     fields["Game"] = [await get_game_id(base, object.name)];
     console.log(`game starting with ${JSON.stringify(fields)} as fields`);
     const created = await base('Scoring Data').create(fields);
     return created.id;
 };
-
+exports.mini_game_server_start = async function(base, object) {
+    for (let player of object.players) {
+        let player_id = await get_player_id(base, player);
+        if (player_id) {
+            fields["Players Present"].push(player_id);
+        }
+    }
+};
 exports.end_game = async function(base, object, record_id) {
     let fields = {};
     if (object.Gold) {
