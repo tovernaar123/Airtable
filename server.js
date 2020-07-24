@@ -96,6 +96,8 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
             if (ws) {
                 ws.send(JSON.stringify({
                     "type": "start_game",
+                    "name": name,
+                    "player_count": player_count,
                     "args": args,
                     "server": ip,
                     "record_id": record_id,
