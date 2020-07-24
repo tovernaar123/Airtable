@@ -4,7 +4,7 @@ const https = require("https");
 const jwt = require("jsonwebtoken");
 const WebSocket = require("ws");
 
-const { started_game, end_game } = require('./airtable.js');
+const { start_game, end_game, started_game } = require('./airtable.js');
 
 
 let socket_to_client_data = new Map();
@@ -37,13 +37,22 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
         server_disconnected(ip, server);
         console.log(`lost rcon connection with ${ip}`);
     });
-    file_events.on("Started_game", function(server, object) {
+    file_events.on("Started_game", async function(server, object) {
+        if (server.record_id) {
+            let record_id = server.record_id;
+            await started_game(base, object, record_id);
+            //server.record_id = null;
+
+        } else {
+            console.log(`Received end_game, but missing airtable record_id`);
+            //console.log(object);
+        }
         console.log(object);
     });
     //when the Started_game game event is run in file_listener this function will run
     file_events.on("Start_game", async function(server, object) {
         //Setting the airtable things (this returns an id which the other server needs)
-        let record_id = await started_game(base, object);
+        let record_id = await start_game(base, object);
 
         //Adding the name to beiging of the args
         const name = object.name;
@@ -109,20 +118,22 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
             console.log(JSON.stringify(object));
         }
 
-        //Send the stop command
-        await server.rcon.send("/stop_games");
-
-        //In 10 sec kick all players
+        //Send all players to do lobby
         setTimeout(async function() {
-            await server.rcon.send("/kick_all");
+            await server.rcon.send("/lobby_all");
         }, 10000);
 
-        //In 10 sec also print all the scores
+        //In 20 sec kick all players
+        setTimeout(async function() {
+            await server.rcon.send("/kick_all");
+        }, 20000);
+
+        //In 20 sec also print all the scores
         setTimeout(function() {
             print_winners(object).catch(err => {
                 console.log("error printing winners for local game", err);
             });
-        }, 10000);
+        }, 20000);
     });
 
     //start the HTTPS/WebSocket server

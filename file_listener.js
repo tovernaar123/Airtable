@@ -27,7 +27,7 @@ exports.watch_files = function(servers) {
                 return;
             }
 
-            timout = true;
+            timeout = true;
             setTimeout(() => {
                 timeout = false;
                 fs.promises.readFile(path.join(dir, filename)).then(content => {
