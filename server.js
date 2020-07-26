@@ -5,6 +5,7 @@ const jwt = require("jsonwebtoken");
 const WebSocket = require("ws");
 
 const { started_game, stopped_game } = require('./airtable.js');
+const { lua_array } = require('./helpers.js');
 
 
 let socket_to_client_data = new Map();
@@ -166,17 +167,11 @@ async function server_connected(ip, server) {
         await server.rcon.send(`/interface global.servers = {lobby = '${lobby_ip}'}`);
 
         //Get all mini games the server can run
-        let result = await server.rcon.send(`/interface
-            local result = {}
-            for i, name in pairs(mini_games.available) do
-                result[name] = true
-            end
-            return game.table_to_json(result)`.replace(/\r?\n +/g, ' ')
-        );
+        let result = await server.rcon.send(`/interface return game.table_to_json(mini_games.available)`);
 
         //Remove the command complete line
         result = result.split('\n')[0];
-        server.games = Object.keys(JSON.parse(result));
+        server.games = lua_array(JSON.parse(result));
     }
 
     server.online = true;
