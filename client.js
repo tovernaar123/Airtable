@@ -1,7 +1,7 @@
 "use strict";
 const WebSocket = require("ws");
 const fs = require("fs").promises;
-const { end_game } = require('./airtable.js');
+const { end_game, started_game } = require('./airtable.js');
 
 
 let servers;
@@ -37,15 +37,21 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
             console.log(`Received end_game, but missing airtable record_id`);
             console.log(JSON.stringify(object));
         }
-        await server.rcon.send("/stop_games");
+        setTimeout(async function() {
+            await server.rcon.send("/lobby_all");
+        }, 10000);
+
+        //In 20 sec kick all players
         setTimeout(async function() {
             await server.rcon.send("/kick_all");
-        }, 5000);
+        }, 20000);
+
         websocket.send(JSON.stringify({ "type": "end_game", "data": object }));
     });
 
-    file_events.on("Started_game", function(server, object) {
-        console.error('cant start game withouth the lobby');
+    file_events.on("Started_game", async function(server, object) {
+        server.record_id = await started_game(base, object);
+        console.log(object);
     });
 
     //Load tls certificate for websocket connection if it is configured
@@ -70,10 +76,8 @@ async function server_connected(ip, server) {
     //Get all mini games the server can run
     let result = await server.rcon.send(`/interface
         local result = {}
-        for name, mini_game in pairs(mini_games.mini_games) do
-            if game.surfaces[mini_game.map] then
-                result[name] = true
-            end
+        for i, name in pairs(mini_games.available) do
+            result[name] = true
         end
         return game.table_to_json(result)`.replace(/\r?\n +/g, ' ')
     );
@@ -142,17 +146,12 @@ async function on_message(message) {
     console.log(`data recieved: ${JSON.stringify(message, null, 4)}`);
 
     if (message.type === 'start_game') {
-
-        //wait 30 sec then /start the game with the arguments
-        setTimeout(async function() {
-            let server = servers.get(message.server);
-            if (server && server.rcon.authenticated) {
-                server.record_id = message.record_id;
-                await server.rcon.send(`/start ${message.args}`);
-            } else {
-                console.log(`Received start for unavailable server ${message.server}`);
-            }
-        }, 30000);
+        let server = servers.get(message.server);
+        if (server && server.rcon.authenticated) {
+            await server.rcon.send(`/start ${message.name} ${message.player_count} ${message.args}`);
+        } else {
+            console.log(`Received start for unavailable server ${message.server}`);
+        }
 
     } else if (message.type === 'connected') {
 

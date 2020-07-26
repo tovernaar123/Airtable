@@ -4,7 +4,7 @@ const https = require("https");
 const jwt = require("jsonwebtoken");
 const WebSocket = require("ws");
 
-const { started_game, end_game } = require('./airtable.js');
+const { end_game, started_game } = require('./airtable.js');
 
 
 let socket_to_client_data = new Map();
@@ -37,19 +37,25 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
         server_disconnected(ip, server);
         console.log(`lost rcon connection with ${ip}`);
     });
-
-    //when the Started_game game event is run in file_listener this function will run
     file_events.on("Started_game", async function(server, object) {
+        let record_id = server.record_id;
+        server.record_id = await started_game(base, object, record_id);
+        //server.record_id = null;
+        console.log(object);
+    });
+    //when the Start_game game event is run in file_listener this function will run
+    file_events.on("Start_game", async function(server, object) {
 
-        //Setting the airtable things (this returns an id which the other server needs)
-        let record_id = await started_game(base, object);
-
-        //Adding the name to beiging of the args
-        object.arguments.unshift(object.name);
+        //Setting the name of the mini_game
+        const name = object.name;
 
         //setting the args and server parms
-        const args = object.arguments.join(' ');
+        const args = object.args.join(' ');
         const ip = object.server;
+
+
+        //Getting the amount of players
+        const player_count = object.player_count;
 
         //log the argmunts
         console.log(`game arguments are ${JSON.stringify(args)}`);
@@ -60,14 +66,13 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
             target_server.record_id = record_id;
 
             //wait 30 sec the start the game
-            setTimeout(async function() {
-                if (target_server.rcon.authenticated) {
-                    await target_server.rcon.send(`/start ${args}`);
+            if (target_server.rcon.authenticated) {
+                await target_server.rcon.send(`/start ${name} ${player_count} ${args}`);
 
-                } else {
-                    console.log(`Received start for unavailable server ${ip}`);
-                }
-            }, 30000);
+            } else {
+                console.log(`Received start for unavailable server ${ip}`);
+            }
+
 
         } else {
             //Get the socket of the server
@@ -83,9 +88,10 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
             if (ws) {
                 ws.send(JSON.stringify({
                     "type": "start_game",
+                    "name": name,
+                    "player_count": player_count,
                     "args": args,
                     "server": ip,
-                    "record_id": record_id,
                 }));
 
             } else {
@@ -105,20 +111,22 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
             console.log(JSON.stringify(object));
         }
 
-        //Send the stop command
-        await server.rcon.send("/stop_games");
-
-        //In 10 sec kick all players
+        //Send all players to do lobby
         setTimeout(async function() {
-            await server.rcon.send("/kick_all");
+            await server.rcon.send("/lobby_all");
         }, 10000);
 
-        //In 10 sec also print all the scores
+        //In 20 sec kick all players
+        setTimeout(async function() {
+            await server.rcon.send("/kick_all");
+        }, 20000);
+
+        //In 20 sec also print all the scores
         setTimeout(function() {
             print_winners(object).catch(err => {
                 console.log("error printing winners for local game", err);
             });
-        }, 10000);
+        }, 20000);
     });
 
     //start the HTTPS/WebSocket server
@@ -160,10 +168,8 @@ async function server_connected(ip, server) {
         //Get all mini games the server can run
         let result = await server.rcon.send(`/interface
             local result = {}
-            for name, mini_game in pairs(mini_games.mini_games) do
-                if game.surfaces[mini_game.map] then
-                    result[name] = true
-                end
+            for i, name in pairs(mini_games.available) do
+                result[name] = true
             end
             return game.table_to_json(result)`.replace(/\r?\n +/g, ' ')
         );
