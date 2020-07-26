@@ -38,40 +38,27 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
         server_disconnected(ip, server);
         console.log(`lost rcon connection with ${ip}`);
     });
-    file_events.on("started_game", async function(server, object) {
+    file_events.on("started_game", async function(server, event) {
         let record_id = server.record_id;
-        server.record_id = await started_game(base, object, record_id);
-        //server.record_id = null;
-        console.log(object);
+        server.record_id = await started_game(base, event.name, event.players);
+        console.log(event);
     });
     //when the start_game game event is run in file_listener this function will run
-    file_events.on("start_game", async function(server, object) {
-
-        //Setting the name of the mini_game
-        const name = object.name;
-
-        //setting the args and server parms
-        const args = object.args.join(' ');
-        const ip = object.server;
-
-
-        //Getting the amount of players
-        const player_count = object.player_count;
-
+    file_events.on("start_game", async function(server, event) {
         //log the argmunts
-        console.log(`game arguments are ${JSON.stringify(args)}`);
+        console.log(`game arguments are ${JSON.stringify(event.args)}`);
 
         //Checking if the server is local
-        if (servers.has(ip)) {
-            let target_server = servers.get(ip);
+        if (servers.has(event.server)) {
+            let target_server = servers.get(event.server);
             target_server.record_id = record_id;
 
             //wait 30 sec the start the game
             if (target_server.rcon.authenticated) {
-                await target_server.rcon.send(`/start ${name} ${player_count} ${args}`);
+                await target_server.rcon.send(`/start ${event.name} ${event.player_count} ${event.args.join(' ')}`);
 
             } else {
-                console.log(`Received start for unavailable server ${ip}`);
+                console.log(`Received start for unavailable server ${event.server}`);
             }
 
 
@@ -79,7 +66,7 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
             //Get the socket of the server
             let ws;
             for (let [client_ws, client_data] of socket_to_client_data) {
-                if (client_data.servers[ip]) {
+                if (client_data.servers[event.server]) {
                     ws = client_ws;
                     break;
                 }
@@ -87,29 +74,23 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
 
             //If the socket was found, send start game message to it
             if (ws) {
-                ws.send(JSON.stringify({
-                    "type": "start_game",
-                    "name": name,
-                    "player_count": player_count,
-                    "args": args,
-                    "server": ip,
-                }));
+                ws.send(JSON.stringify(event));
 
             } else {
-                console.log(`Received start for unavailable server ${ip}`);
+                console.log(`Received start for unavailable server ${event.server}`);
             }
         }
     });
 
-    file_events.on("stopped_game", async function(server, object) {
+    file_events.on("stopped_game", async function(server, event) {
         if (server.record_id) {
             let record_id = server.record_id;
             server.record_id = null;
-            await stopped_game(base, object, record_id);
+            await stopped_game(base, event, record_id);
 
         } else {
             console.log(`Received stopped_game, but missing airtable record_id`);
-            console.log(JSON.stringify(object));
+            console.log(JSON.stringify(event));
         }
 
         //Send all players to do lobby
@@ -124,7 +105,7 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
 
         //In 20 sec also print all the scores
         setTimeout(function() {
-            print_winners(object).catch(err => {
+            print_winners(event).catch(err => {
                 console.log("error printing winners for local game", err);
             });
         }, 20000);

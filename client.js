@@ -28,20 +28,20 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
         console.log(`lost rcon connection with ${ip}`);
     });
 
-    file_events.on("started_game", async function(server, object) {
-        server.record_id = await started_game(base, object);
-        console.log(object);
+    file_events.on("started_game", async function(server, event) {
+        server.record_id = await started_game(base, event.name, lua_array(event.players));
+        console.log(event);
     });
 
-    file_events.on("stopped_game", async function(server, object) {
+    file_events.on("stopped_game", async function(server, event) {
         if (server.record_id) {
             let record_id = server.record_id;
             server.record_id = null;
-            await stopped_game(base, object, record_id);
+            await stopped_game(base, event, record_id);
 
         } else {
             console.log(`Received stopped_game, but missing airtable record_id`);
-            console.log(JSON.stringify(object));
+            console.log(JSON.stringify(event));
         }
         setTimeout(async function() {
             await server.rcon.send("/lobby_all");
@@ -52,7 +52,7 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
             await server.rcon.send("/kick_all");
         }, 20000);
 
-        websocket.send(JSON.stringify({ "type": "stopped_game", "data": object }));
+        websocket.send(JSON.stringify({ "type": "stopped_game", "data": event }));
     });
 
     //Load tls certificate for websocket connection if it is configured
@@ -143,7 +143,7 @@ async function on_message(message) {
     if (message.type === 'start_game') {
         let server = servers.get(message.server);
         if (server && server.rcon.authenticated) {
-            await server.rcon.send(`/start ${message.name} ${message.player_count} ${message.args}`);
+            await server.rcon.send(`/start ${message.name} ${message.player_count} ${message.args.join(' ')}`);
         } else {
             console.log(`Received start for unavailable server ${message.server}`);
         }

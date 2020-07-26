@@ -42,12 +42,14 @@ async function get_game_id(base, name) {
     game_cache.set(name, id);
     return id;
 };
-exports.started_game = async function(base, object) {
+
+//Create match record in Scoring Data table.
+exports.started_game = async function(base, name, players) {
     let fields = {};
     fields["Players Present"] = [];
     fields["Time Started"] = new Date().toISOString();
-    fields["Game"] = [await get_game_id(base, object.name)];
-    for (let player of object.players) {
+    fields["Game"] = [await get_game_id(base, name)];
+    for (let player of players) {
         let player_id = await get_player_id(base, player);
         if (player_id) {
             fields["Players Present"].push(player_id);
