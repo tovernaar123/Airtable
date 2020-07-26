@@ -42,17 +42,6 @@ async function get_game_id(base, name) {
     game_cache.set(name, id);
     return id;
 };
-/*
-exports.start_game = async function(base, object) {
-    let fields = {};
-    fields["Players Present"] = [];
-    fields["Time Started"] = new Date().toISOString();
-    fields["Game"] = [await get_game_id(base, object.name)];
-    console.log(`game starting with ${JSON.stringify(fields)} as fields`);
-    const created = await base('Scoring Data').create(fields);
-    return created.id;
-};
-*/
 exports.started_game = async function(base, object) {
     let fields = {};
     fields["Players Present"] = [];
