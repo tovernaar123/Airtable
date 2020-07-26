@@ -4,7 +4,7 @@ const https = require("https");
 const jwt = require("jsonwebtoken");
 const WebSocket = require("ws");
 
-const {end_game, started_game } = require('./airtable.js');
+const { end_game, started_game } = require('./airtable.js');
 
 
 let socket_to_client_data = new Map();
