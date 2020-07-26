@@ -4,7 +4,7 @@ const https = require("https");
 const jwt = require("jsonwebtoken");
 const WebSocket = require("ws");
 
-const { start_game, end_game, started_game } = require('./airtable.js');
+const {end_game, started_game } = require('./airtable.js');
 
 
 let socket_to_client_data = new Map();
@@ -38,23 +38,15 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
         console.log(`lost rcon connection with ${ip}`);
     });
     file_events.on("Started_game", async function(server, object) {
-        if (server.record_id) {
-            let record_id = server.record_id;
-            await started_game(base, object, record_id);
-            //server.record_id = null;
-
-        } else {
-            console.log(`Received end_game, but missing airtable record_id`);
-            //console.log(object);
-        }
+        let record_id = server.record_id;
+        server.record_id = await started_game(base, object, record_id);
+        //server.record_id = null;
         console.log(object);
     });
-    //when the Started_game game event is run in file_listener this function will run
+    //when the Start_game game event is run in file_listener this function will run
     file_events.on("Start_game", async function(server, object) {
-        //Setting the airtable things (this returns an id which the other server needs)
-        let record_id = await start_game(base, object);
 
-        //Adding the name to beiging of the args
+        //Setting the name of the mini_game
         const name = object.name;
 
         //setting the args and server parms
@@ -100,7 +92,6 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
                     "player_count": player_count,
                     "args": args,
                     "server": ip,
-                    "record_id": record_id,
                 }));
 
             } else {

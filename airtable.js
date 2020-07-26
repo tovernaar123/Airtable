@@ -42,7 +42,7 @@ async function get_game_id(base, name) {
     game_cache.set(name, id);
     return id;
 };
-
+/*
 exports.start_game = async function(base, object) {
     let fields = {};
     fields["Players Present"] = [];
@@ -52,9 +52,12 @@ exports.start_game = async function(base, object) {
     const created = await base('Scoring Data').create(fields);
     return created.id;
 };
-exports.started_game = async function(base, object, record_id) {
+*/
+exports.started_game = async function(base, object) {
     let fields = {};
     fields["Players Present"] = [];
+    fields["Time Started"] = new Date().toISOString();
+    fields["Game"] = [await get_game_id(base, object.name)];
     for (let player of object.players) {
         let player_id = await get_player_id(base, player);
         if (player_id) {
@@ -62,7 +65,9 @@ exports.started_game = async function(base, object, record_id) {
         }
     }
     console.log(`game starting with this ${JSON.stringify(fields)} as the fields. `);
-    console.log(await base('Scoring Data').update(record_id, fields));
+    const created = await base('Scoring Data').create(fields);
+    console.log(created);
+    return created.id;
 };
 exports.end_game = async function(base, object, record_id) {
     let fields = {};

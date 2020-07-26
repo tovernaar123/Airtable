@@ -1,7 +1,7 @@
 "use strict";
 const WebSocket = require("ws");
 const fs = require("fs").promises;
-const { end_game, started_game} = require('./airtable.js');
+const { end_game, started_game } = require('./airtable.js');
 
 
 let servers;
@@ -50,12 +50,7 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
     });
 
     file_events.on("Started_game", async function(server, object) {
-        if (server.record_id) {
-            let record_id = server.record_id;
-            await started_game(base, object, record_id);
-        } else {
-            console.log(`Received end_game, but missing airtable record_id`);
-        }
+        server.record_id = await started_game(base, object);
         console.log(object);
     });
 
@@ -84,7 +79,7 @@ async function server_connected(ip, server) {
         for i, name in pairs(mini_games.available) do
             result[name] = true
         end
-        return game.table_to_json(result)`.replace(/\r?\n +/g, ' ').replace(/\r?\n +/g, ' ')
+        return game.table_to_json(result)`.replace(/\r?\n +/g, ' ')
     );
 
     //Remove the command complete line
@@ -151,17 +146,12 @@ async function on_message(message) {
     console.log(`data recieved: ${JSON.stringify(message, null, 4)}`);
 
     if (message.type === 'start_game') {
-
-        //wait 30 sec then /start the game with the arguments
-        setTimeout(async function() {
-            let server = servers.get(message.server);
-            if (server && server.rcon.authenticated) {
-                server.record_id = message.record_id;
-                await server.rcon.send(`/start ${message.name} ${message.player_count} ${message.args}`);
-            } else {
-                console.log(`Received start for unavailable server ${message.server}`);
-            }
-        }, 30000);
+        let server = servers.get(message.server);
+        if (server && server.rcon.authenticated) {
+            await server.rcon.send(`/start ${message.name} ${message.player_count} ${message.args}`);
+        } else {
+            console.log(`Received start for unavailable server ${message.server}`);
+        }
 
     } else if (message.type === 'connected') {
 
