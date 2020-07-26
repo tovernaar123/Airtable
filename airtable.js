@@ -58,7 +58,7 @@ exports.started_game = async function(base, object) {
     console.log(created);
     return created.id;
 };
-exports.end_game = async function(base, object, record_id) {
+exports.stopped_game = async function(base, object, record_id) {
     let fields = {};
     if (object.Gold) {
         let player = await get_player_id(base, object.Gold);

@@ -1,7 +1,7 @@
 "use strict";
 const WebSocket = require("ws");
 const fs = require("fs").promises;
-const { end_game, started_game } = require('./airtable.js');
+const { started_game, stopped_game } = require('./airtable.js');
 
 
 let servers;
@@ -27,14 +27,19 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
         console.log(`lost rcon connection with ${ip}`);
     });
 
-    file_events.on("end_game", async function(server, object) {
+    file_events.on("started_game", async function(server, object) {
+        server.record_id = await started_game(base, object);
+        console.log(object);
+    });
+
+    file_events.on("stopped_game", async function(server, object) {
         if (server.record_id) {
             let record_id = server.record_id;
             server.record_id = null;
-            await end_game(base, object, record_id);
+            await stopped_game(base, object, record_id);
 
         } else {
-            console.log(`Received end_game, but missing airtable record_id`);
+            console.log(`Received stopped_game, but missing airtable record_id`);
             console.log(JSON.stringify(object));
         }
         setTimeout(async function() {
@@ -46,12 +51,7 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
             await server.rcon.send("/kick_all");
         }, 20000);
 
-        websocket.send(JSON.stringify({ "type": "end_game", "data": object }));
-    });
-
-    file_events.on("Started_game", async function(server, object) {
-        server.record_id = await started_game(base, object);
-        console.log(object);
+        websocket.send(JSON.stringify({ "type": "stopped_game", "data": object }));
     });
 
     //Load tls certificate for websocket connection if it is configured

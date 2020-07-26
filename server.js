@@ -4,7 +4,7 @@ const https = require("https");
 const jwt = require("jsonwebtoken");
 const WebSocket = require("ws");
 
-const { end_game, started_game } = require('./airtable.js');
+const { started_game, stopped_game } = require('./airtable.js');
 
 
 let socket_to_client_data = new Map();
@@ -37,14 +37,14 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
         server_disconnected(ip, server);
         console.log(`lost rcon connection with ${ip}`);
     });
-    file_events.on("Started_game", async function(server, object) {
+    file_events.on("started_game", async function(server, object) {
         let record_id = server.record_id;
         server.record_id = await started_game(base, object, record_id);
         //server.record_id = null;
         console.log(object);
     });
-    //when the Start_game game event is run in file_listener this function will run
-    file_events.on("Start_game", async function(server, object) {
+    //when the start_game game event is run in file_listener this function will run
+    file_events.on("start_game", async function(server, object) {
 
         //Setting the name of the mini_game
         const name = object.name;
@@ -100,14 +100,14 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
         }
     });
 
-    file_events.on("end_game", async function(server, object) {
+    file_events.on("stopped_game", async function(server, object) {
         if (server.record_id) {
             let record_id = server.record_id;
             server.record_id = null;
-            await end_game(base, object, record_id);
+            await stopped_game(base, object, record_id);
 
         } else {
-            console.log(`Received end_game, but missing airtable record_id`);
+            console.log(`Received stopped_game, but missing airtable record_id`);
             console.log(JSON.stringify(object));
         }
 
@@ -287,8 +287,8 @@ async function on_message(client_data, message) {
         client_data.servers = message.servers;
         await update_lobby_server_list();
 
-    } else if (message.type === "end_game") {
-        //If the game has been ended print who has won in the lobby.
+    } else if (message.type === "stopped_game") {
+        //If the game has ended print who has won in the lobby.
         //send it 10 sec
         setTimeout(function() {
             print_winners(message.data).catch(err => {
