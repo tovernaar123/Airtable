@@ -37,7 +37,7 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
         if (server.record_id) {
             let record_id = server.record_id;
             server.record_id = null;
-            await stopped_game(base, event, record_id);
+            await stopped_game(base, lua_array(event.results), record_id);
 
         } else {
             console.log(`Received stopped_game, but missing airtable record_id`);
@@ -52,7 +52,7 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
             await server.rcon.send("/kick_all");
         }, 20000);
 
-        websocket.send(JSON.stringify({ "type": "stopped_game", "data": event }));
+        websocket.send(JSON.stringify(event));
     });
 
     //Load tls certificate for websocket connection if it is configured

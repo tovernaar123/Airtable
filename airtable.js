@@ -1,4 +1,5 @@
 "use strict";
+const { lua_array } = require('./helpers.js');
 
 
 //Get the id for the record of the player by the given name in the Player Data table
@@ -65,22 +66,22 @@ exports.started_game = async function(base, name, players) {
     console.log(created);
     return created.id;
 };
-exports.stopped_game = async function(base, object, record_id) {
+
+//Update match record in Scoring Data table with pole positions.
+exports.stopped_game = async function(base, results, record_id) {
     let fields = {};
-    if (object.Gold) {
-        let player = await get_player_id(base, object.Gold);
-        fields["Gold Player"] = player ? [player] : [];
-        fields["Gold Data"] = object.Gold_data;
-    }
-    if (object.Silver) {
-        let player = await get_player_id(base, object.Silver);
-        fields["Silver Player"] = player ? [player] : [];
-        fields["Silver Data"] = object.Silver_data;
-    }
-    if (object.Bronze) {
-        let player = await get_player_id(base, object.Bronze);
-        fields["Bronze Player"] = player ? [player] : [];
-        fields["Bronze Data"] = object.Bronze_data;
+
+    let place_to_field = [null, "Gold", "Silver", "Bronze"];
+    for (let entry of results) {
+        //Placement above 3rd place is not stored in the airtable.
+        if (entry.place > 3) {
+            continue;
+        }
+        let player_ids = await Promise.all(
+            lua_array(entry.players).map(player => get_player_id(base, player))
+        );
+        fields[`${place_to_field[entry.place]} Player`] = player_ids.filter((id) => id !== null);
+        fields[`${place_to_field[entry.place]} Data`] = entry.score;
     }
 
     fields["Time Ended"] = new Date().toISOString();

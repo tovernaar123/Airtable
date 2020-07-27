@@ -103,7 +103,7 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
 
         //In 20 sec also print all the scores
         setTimeout(function() {
-            print_winners(event).catch(print_error("calling print_winners for local game"));
+            print_winners(lua_array(event.results)).catch(print_error("calling print_winners for local game"));
         }, 20000);
     });
 
@@ -117,17 +117,26 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
 };
 
 //Print the 1st, 2nd and 3rd place for a game on the lobby server
-async function print_winners(object) {
-    async function print(color, pos, player, score) {
+async function print_winners(results) {
+    //Joins a array of strings with comma except the last entry is joined with " and ".
+    function and_join(list) {
+        return [...list.slice(0, -2), list.slice(-2).join(" and ")].join(", ");
+    }
+
+    async function print(color, pos, result) {
+        let players = and_join(lua_array(result.players));
         await lobby_server.rcon.send(
-            `/sc game.print("[color=${color}]${pos}: ${player} with a score of ${score}.[/color]")`
+            `/sc game.print("[color=${color}]${pos}: ${players} with a score of ${result.score}.[/color]")`
         );
     }
 
+    //Map list of result entries by their place
+    let places = new Map(results.map(result => [result.place, result]));
+
     //Print gold, silver and bronze positions if they exist
-    if (object.Gold) { await print('#FFD700', "1st", object.Gold, object.Gold_data); }
-    if (object.Silver) { await print('#C0C0C0', "2nd", object.Silver, object.Silver_data); }
-    if (object.Bronze) { await print('#cd7f32', "3rd", object.Bronze, object.Bronze_data); }
+    if (places.has(1)) { await print('#FFD700', "1st", places.get(1)); }
+    if (places.has(2)) { await print('#C0C0C0', "2nd", places.get(2)); }
+    if (places.has(3)) { await print('#CD7f32', "3rd", places.get(3)); }
 }
 
 //server setup
@@ -263,7 +272,7 @@ async function on_message(client_data, message) {
         //If the game has ended print who has won in the lobby.
         //send it 10 sec
         setTimeout(function() {
-            print_winners(message.data).catch(err => {
+            print_winners(lua_array(message.results)).catch(err => {
                 console.log("error printing winners for remote game", err);
             });
         }, 10000);
