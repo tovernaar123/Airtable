@@ -48,7 +48,12 @@ exports.started_game = async function(base, name, players) {
     let fields = {};
     fields["Players Present"] = [];
     fields["Time Started"] = new Date().toISOString();
-    fields["Game"] = [await get_game_id(base, name)];
+    let game_id = await get_game_id(base, name);
+    if (game_id !== null) {
+        fields["Game"] = [game_id];
+    } else {
+        console.log(`Warning: Got started_game for nonexistent game ${name}`);
+    }
     for (let player of players) {
         let player_id = await get_player_id(base, player);
         if (player_id) {

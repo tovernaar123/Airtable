@@ -2,7 +2,7 @@
 const WebSocket = require("ws");
 const fs = require("fs").promises;
 const { started_game, stopped_game } = require('./airtable.js');
-const { lua_array } = require('./helpers.js');
+const { lua_array, print_error } = require('./helpers.js');
 
 
 let servers;
@@ -18,9 +18,7 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
     }
 
     rcon_events.on("connect", function(ip, server) {
-        server_connected(ip, server).catch(err => {
-            console.log(`Error setting up rcon connection to ${ip}:`, err);
-        });
+        server_connected(ip, server).catch(print_error(`setting up rcon connection to ${ip}:`));
     });
 
     rcon_events.on("close", function(ip, server) {
@@ -28,9 +26,11 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
         console.log(`lost rcon connection with ${ip}`);
     });
 
-    file_events.on("started_game", async function(server, event) {
-        server.record_id = await started_game(base, event.name, lua_array(event.players));
+    file_events.on("started_game", function(server, event) {
         console.log(event);
+        started_game(base, event.name, lua_array(event.players)).then(record_id => {
+            server.record_id = record_id;
+        }).catch(print_err("calling started_game"));
     });
 
     file_events.on("stopped_game", async function(server, event) {
@@ -120,9 +120,7 @@ function connect_websocket(url, token, cert) {
         //empty
     });
     ws.on("message", function(message) {
-        on_message(JSON.parse(message)).catch(err => {
-            console.log("Error handling message", err);
-        });
+        on_message(JSON.parse(message)).catch(print_error(`on_message(${message.type}) failed`));
     });
     ws.on("error", function(error) {
         console.error("WebSocket connection error:", error.message);

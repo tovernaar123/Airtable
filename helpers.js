@@ -22,3 +22,16 @@ exports.lua_array = function lua_array(array) {
     }
     return [];
 };
+
+/**
+    Returns an error handler that will print the error along with the stage it
+    was thrown from to aid in debugging.
+    @param {string} what - What to attribute the error to.
+    @returns {function(Error)} function printing the error given to it.
+*/
+exports.print_error = function print_error(what) {
+    return function(err) {
+        console.log(`Error ${what}`);
+        console.log(err);
+    };
+};

@@ -5,7 +5,7 @@ const jwt = require("jsonwebtoken");
 const WebSocket = require("ws");
 
 const { started_game, stopped_game } = require('./airtable.js');
-const { lua_array } = require('./helpers.js');
+const { lua_array, print_error } = require('./helpers.js');
 
 
 let socket_to_client_data = new Map();
@@ -29,33 +29,31 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
     [lobby_ip, lobby_server] = lobby_servers[0];
 
     rcon_events.on("connect", function(ip, server) {
-        server_connected(ip, server).catch(err => {
-            console.log(`Error setting up rcon connection to ${ip}:`, err);
-        });
+        server_connected(ip, server).catch(print_error(`setting up rcon connection to ${ip}:`));
     });
 
     rcon_events.on("close", function(ip, server) {
         server_disconnected(ip, server);
         console.log(`lost rcon connection with ${ip}`);
     });
-    file_events.on("started_game", async function(server, event) {
-        let record_id = server.record_id;
-        server.record_id = await started_game(base, event.name, event.players);
+    file_events.on("started_game", function(server, event) {
         console.log(event);
+        started_game(base, event.name, lua_array(event.players)).then(record_id => {
+            server.record_id = record_id;
+        }).catch(print_error("calling started_game"));
     });
     //when the start_game game event is run in file_listener this function will run
-    file_events.on("start_game", async function(server, event) {
+    file_events.on("start_game", function(server, event) {
         //log the argmunts
         console.log(`game arguments are ${JSON.stringify(event.args)}`);
 
         //Checking if the server is local
         if (servers.has(event.server)) {
             let target_server = servers.get(event.server);
-            target_server.record_id = record_id;
-
-            //wait 30 sec the start the game
             if (target_server.rcon.authenticated) {
-                await target_server.rcon.send(`/start ${event.name} ${event.player_count} ${event.args.join(' ')}`);
+                target_server.rcon.send(`/start ${event.name} ${event.player_count} ${event.args.join(' ')}`).catch(
+                    print_error("sending /start command to local server")
+                );
 
             } else {
                 console.log(`Received start for unavailable server ${event.server}`);
@@ -82,11 +80,11 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
         }
     });
 
-    file_events.on("stopped_game", async function(server, event) {
+    file_events.on("stopped_game", function(server, event) {
         if (server.record_id) {
             let record_id = server.record_id;
             server.record_id = null;
-            await stopped_game(base, event, record_id);
+            stopped_game(base, lua_array(event.results), record_id).catch(print_error("calling stopped_game"));
 
         } else {
             console.log(`Received stopped_game, but missing airtable record_id`);
@@ -94,20 +92,18 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
         }
 
         //Send all players to do lobby
-        setTimeout(async function() {
-            await server.rcon.send("/lobby_all");
+        setTimeout(function() {
+            server.rcon.send("/lobby_all").catch(print_error("sending /lobby_all"));
         }, 10000);
 
         //In 20 sec kick all players
-        setTimeout(async function() {
-            await server.rcon.send("/kick_all");
+        setTimeout(function() {
+            server.rcon.send("/kick_all").catch(print_error("sending /kick_all"));
         }, 20000);
 
         //In 20 sec also print all the scores
         setTimeout(function() {
-            print_winners(event).catch(err => {
-                console.log("error printing winners for local game", err);
-            });
+            print_winners(event).catch(print_error("calling print_winners for local game"));
         }, 20000);
     });
 
