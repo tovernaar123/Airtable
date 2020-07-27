@@ -90,6 +90,11 @@ function server_disconnected(ip, server) {
 }
 
 function send_server_list() {
+    if (websocket.readyState !== WebSocket.OPEN) {
+        //Not connected to the server yet
+        return;
+    }
+
     let server_list = {};
     for (let [ip, server] of servers) {
         if (server.online) {
