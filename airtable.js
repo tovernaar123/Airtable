@@ -114,6 +114,7 @@ exports.init = async function init(base) {
 
             records.forEach(function(record) {
                 let player_name = record.get('Player Name');
+                player_name = player_name.replace(/'/g, "\\'");
                 let roles = record.get('roles');
                 players_roles[player_name] = roles;
             });
@@ -135,6 +136,8 @@ exports.init = async function init(base) {
                 console.log('checking roles');
                 records.forEach(function(record) {
                     let player_name = record.get('Player Name');
+                    player_name = player_name.replace(/'/g, "\\'");
+                    console.log(player_name);
                     let currenct_roles = players_roles[player_name];
 
                     let roles = record.get('roles');
