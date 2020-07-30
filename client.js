@@ -38,8 +38,6 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
         server_disconnected(ip, server);
         console.log(`lost rcon connection with ${ip}`);
     });
-    var s = "";
-    let regex = /\
     file_events.on("end_game", async function(server, object) {
         if (server.record_id) {
             let record_id = server.record_id;
