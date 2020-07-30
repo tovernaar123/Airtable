@@ -1,4 +1,5 @@
 "use strict";
+const { lua_array } = require('./helpers.js');
 
 
 //Get the id for the record of the player by the given name in the Player Data table
@@ -42,12 +43,19 @@ async function get_game_id(base, name) {
     game_cache.set(name, id);
     return id;
 };
-exports.started_game = async function(base, object) {
+
+//Create match record in Scoring Data table.
+exports.started_game = async function(base, name, players) {
     let fields = {};
     fields["Players Present"] = [];
     fields["Time Started"] = new Date().toISOString();
-    fields["Game"] = [await get_game_id(base, object.name)];
-    for (let player of object.players) {
+    let game_id = await get_game_id(base, name);
+    if (game_id !== null) {
+        fields["Game"] = [game_id];
+    } else {
+        console.log(`Warning: Got started_game for nonexistent game ${name}`);
+    }
+    for (let player of players) {
         let player_id = await get_player_id(base, player);
         if (player_id) {
             fields["Players Present"].push(player_id);
@@ -58,22 +66,22 @@ exports.started_game = async function(base, object) {
     console.log(created);
     return created.id;
 };
-exports.end_game = async function(base, object, record_id) {
+
+//Update match record in Scoring Data table with pole positions.
+exports.stopped_game = async function(base, results, record_id) {
     let fields = {};
-    if (object.Gold) {
-        let player = await get_player_id(base, object.Gold);
-        fields["Gold Player"] = player ? [player] : [];
-        fields["Gold Data"] = object.Gold_data;
-    }
-    if (object.Silver) {
-        let player = await get_player_id(base, object.Silver);
-        fields["Silver Player"] = player ? [player] : [];
-        fields["Silver Data"] = object.Silver_data;
-    }
-    if (object.Bronze) {
-        let player = await get_player_id(base, object.Bronze);
-        fields["Bronze Player"] = player ? [player] : [];
-        fields["Bronze Data"] = object.Bronze_data;
+
+    let place_to_field = [null, "Gold", "Silver", "Bronze"];
+    for (let entry of results) {
+        //Placement above 3rd place is not stored in the airtable.
+        if (entry.place > 3) {
+            continue;
+        }
+        let player_ids = await Promise.all(
+            lua_array(entry.players).map(player => get_player_id(base, player))
+        );
+        fields[`${place_to_field[entry.place]} Player`] = player_ids.filter((id) => id !== null);
+        fields[`${place_to_field[entry.place]} Data`] = entry.score;
     }
 
     fields["Time Ended"] = new Date().toISOString();
@@ -124,7 +132,7 @@ exports.init = async function init(base) {
                 fields: ["roles", "Player Name"],
                 filterByFormula: `DATETIME_DIFF( LAST_MODIFIED_TIME(), '${last_checked}', 'milliseconds') >= 0`,
             }).eachPage(function page(records, fetchNextPage) {
-                console.log('here');
+                console.log('checking roles');
                 records.forEach(function(record) {
                     let player_name = record.get('Player Name');
                     let currenct_roles = players_roles[player_name];
@@ -151,13 +159,17 @@ exports.init = async function init(base) {
                     }
 
                     players_roles[player_name] = roles;
-                    console.log(`added ${added_roles} as roles to ${player_name}`);
-                    console.log(`removed ${removed_roles} these roles from ${player_name}`);
                     if (!Array.isArray(added_roles)) { added_roles = [added_roles]; }
                     if (!Array.isArray(removed_roles)) { removed_roles = [removed_roles]; }
 
-                    if (added_roles.length > 0) { airtable_events.emit('added_roles', added_roles, player_name); }
-                    if (removed_roles.length > 0) { airtable_events.emit('removed_roles', removed_roles, player_name); }
+                    if (added_roles.length > 0) {
+                        airtable_events.emit('added_roles', added_roles, player_name);
+                        console.log(`added ${added_roles} as roles to ${player_name}`);
+                    }
+                    if (removed_roles.length > 0) {
+                        airtable_events.emit('removed_roles', removed_roles, player_name);
+                        console.log(`removed ${removed_roles} from ${player_name}`);
+                    }
 
                     console.log(added_roles);
                     console.log(removed_roles);

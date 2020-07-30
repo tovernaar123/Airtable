@@ -22,8 +22,8 @@ exports.watch_files = function(servers) {
         let timeout = false;
         //Eslint doesn't seem to understand variable scoping :/
         //eslint-disable-next-line no-loop-func
-        fs.watch(dir, (event, filename) => {
-            if (timeout || event !== 'change' || !filename) {
+        fs.watch(dir, (file_event, filename) => {
+            if (timeout || file_event !== 'change' || !filename) {
                 return;
             }
 
@@ -31,10 +31,10 @@ exports.watch_files = function(servers) {
             setTimeout(() => {
                 timeout = false;
                 fs.promises.readFile(path.join(dir, filename)).then(content => {
-                    let object = JSON.parse(content);
-                    if (!file_events.emit(object.type, server, object)) {
-                        console.log(`Warning: Unhandled file event ${object.type}`);
-                        console.log(object);
+                    let event = JSON.parse(content);
+                    if (!file_events.emit(event.type, server, event)) {
+                        console.log(`Warning: Unhandled file event ${event.type}`);
+                        console.log(event);
                     }
                 }).catch(err => {
                     console.error(`Error reading ${filename} for ${ip}:`, err);
