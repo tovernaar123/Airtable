@@ -80,3 +80,97 @@ exports.end_game = async function(base, object, record_id) {
     console.log(`game ending with this ${JSON.stringify(fields)} as the fields. `);
     console.log(await base('Scoring Data').update(record_id, fields));
 };
+
+let players_roles = {};
+let last_checked = '';
+const events = require('events');
+const airtable_events = new events.EventEmitter();
+airtable_events.on("newListener", (event, listener) => {
+    if (event === "init") {
+        if (Object.keys(players_roles).length !== 0) {
+            listener(players_roles);
+        }
+    }
+});
+exports.airtable_events = airtable_events;
+exports.player_roles = players_roles;
+exports.init = async function init(base) {
+
+    last_checked = new Date().toISOString();
+    let pages = await base('Player Data').select({
+        fields: ["roles", "Player Name"],
+    });
+
+    await new Promise(function(resolve, reject) {
+        pages.eachPage(function page(records, fetchNextPage) {
+
+            records.forEach(function(record) {
+                let player_name = record.get('Player Name');
+                let roles = record.get('roles');
+                players_roles[player_name] = roles;
+            });
+
+            fetchNextPage();
+        }, function done(err) {
+            if (err) { console.error(err); reject(err); }
+            resolve();
+        });
+    });
+    airtable_events.emit('init', players_roles);
+    setInterval(async () => {
+        let check = new Date().toISOString();
+        await new Promise(function(resolve, reject) {
+            pages = base('Player Data').select({
+                fields: ["roles", "Player Name"],
+                filterByFormula: `DATETIME_DIFF( LAST_MODIFIED_TIME(), '${last_checked}', 'milliseconds') >= 0`,
+            }).eachPage(function page(records, fetchNextPage) {
+                console.log('here');
+                records.forEach(function(record) {
+                    let player_name = record.get('Player Name');
+                    let currenct_roles = players_roles[player_name];
+
+                    let roles = record.get('roles');
+
+                    let added_roles;
+                    let removed_roles;
+                    if (roles !== undefined) {
+                        if (currenct_roles === undefined) {
+                            added_roles = roles;
+                            removed_roles = [];
+                        } else {
+                            added_roles = roles.filter(x => !currenct_roles.includes(x));
+                            removed_roles = currenct_roles.filter(x => !roles.includes(x));
+                        }
+                    } else {
+                        added_roles = [];
+                        if (currenct_roles === undefined) {
+                            removed_roles = [];
+                        } else {
+                            removed_roles = currenct_roles;
+                        }
+                    }
+
+                    players_roles[player_name] = roles;
+                    console.log(`added ${added_roles} as roles to ${player_name}`);
+                    console.log(`removed ${removed_roles} these roles from ${player_name}`);
+                    if (!Array.isArray(added_roles)) { added_roles = [added_roles]; }
+                    if (!Array.isArray(removed_roles)) { removed_roles = [removed_roles]; }
+
+                    if (added_roles.length > 0) { airtable_events.emit('added_roles', added_roles, player_name); }
+                    if (removed_roles.length > 0) { airtable_events.emit('removed_roles', removed_roles, player_name); }
+
+                    console.log(added_roles);
+                    console.log(removed_roles);
+                });
+
+                fetchNextPage();
+            }, function done(err) {
+                if (err) { console.error(err); reject(err); }
+                resolve();
+            });
+        });
+        last_checked = check;
+    }, 10000);
+
+    return airtable_events;
+};

@@ -1,12 +1,24 @@
 "use strict";
 const WebSocket = require("ws");
 const fs = require("fs").promises;
-const { end_game, started_game } = require('./airtable.js');
+const { end_game, started_game} = require('./airtable.js');
+const events = require('events');
 
+let player_roles = {};
+const role_events = new events.EventEmitter();
+role_events.on("newListener", (event, listener) => {
+    if (event === "init") {
+        if (Object.keys(player_roles).length !== 0) {
+            listener(player_roles);
+        }
+    }
+});
 
 let servers;
 let websocket;
 let lobby_ip;
+
+
 exports.init = async function(config, init_servers, base, file_events, rcon_events) {
     servers = init_servers;
 
@@ -26,7 +38,8 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
         server_disconnected(ip, server);
         console.log(`lost rcon connection with ${ip}`);
     });
-
+    var s = "";
+    let regex = /\
     file_events.on("end_game", async function(server, object) {
         if (server.record_id) {
             let record_id = server.record_id;
@@ -82,6 +95,39 @@ async function server_connected(ip, server) {
         return game.table_to_json(result)`.replace(/\r?\n +/g, ' ')
     );
 
+    server.player_roles_init = async function(players_roles) {
+        await server.rcon.send(`/interface 
+        Roles.override_player_roles(
+            game.json_to_table('${JSON.stringify(players_roles)}')
+        )`.replace(/\r?\n +/g, ' ')
+        );
+    };
+
+    server.added_roles = async function (roles, name) {
+        await server.rcon.send(`/interface
+        Roles.assign_player(
+            '${name}',
+            game.json_to_table('${JSON.stringify(roles)}'), 
+            nil, 
+            true, 
+            true
+        )`.replace(/\r?\n +/g, ' '));
+    };
+
+    server.removed_roles = async function (roles, name) {
+        await server.rcon.send(`/interface
+        Roles.unassign_player(
+            '${name}',
+            game.json_to_table('${JSON.stringify(roles)}'), 
+            nil, 
+            true, 
+            true
+        )`.replace(/\r?\n +/g, ' '));
+    };
+
+    role_events.on('init', server.player_roles_init);
+    role_events.on('added_roles', server.added_roles);
+    role_events.on('removed_roles', server.removed_roles);
     //Remove the command complete line
     result = result.split('\n')[0];
     server.games = Object.keys(JSON.parse(result));
@@ -91,6 +137,9 @@ async function server_connected(ip, server) {
 
 function server_disconnected(ip, server) {
     server.online = false;
+    role_events.removeListener('removed_roles', server.removed_roles);
+    role_events.removeListener('init', server.player_roles_init);
+    role_events.removeListener('added_roles', server.added_roles);
     send_server_list();
 }
 
@@ -144,31 +193,43 @@ function connect_websocket(url, token, cert) {
 //Invoked when a message is received from the WebSocket server.
 async function on_message(message) {
     console.log(`data recieved: ${JSON.stringify(message, null, 4)}`);
-
-    if (message.type === 'start_game') {
-        let server = servers.get(message.server);
-        if (server && server.rcon.authenticated) {
-            await server.rcon.send(`/start ${message.name} ${message.player_count} ${message.args}`);
-        } else {
-            console.log(`Received start for unavailable server ${message.server}`);
-        }
-
-    } else if (message.type === 'connected') {
-
-        //Update main server's list of server
-        send_server_list();
-
-        //Update stored lobby ip
-        lobby_ip = message.lobby_ip;
-
-        //loop over all the local server and set the lobby
-        for (let server of servers.values()) {
-            if (server.rcon.authenticated) {
-                await server.rcon.send(`/interface global.servers = {lobby = '${lobby_ip}'}`);
+    switch (message.type) {
+        case 'start_game':
+            let server = servers.get(message.server);
+            if (server && server.rcon.authenticated) {
+                await server.rcon.send(`/start ${message.name} ${message.player_count} ${message.args}`);
+            } else {
+                console.log(`Received start for unavailable server ${message.server}`);
             }
-        }
+            break;
+        case 'connected':
+            //Update main server's list of server
+            send_server_list();
 
-    } else {
-        console.log(`Unkown type ${data.type}`);
+            //Update stored lobby ip
+            lobby_ip = message.lobby_ip;
+
+            //loop over all the local server and set the lobby
+            for (let connected_server of servers.values()) {
+                if (connected_server.rcon.authenticated) {
+                    await connected_server.rcon.send(`/interface global.servers = {lobby = '${lobby_ip}'}`);
+                }
+            }
+            break;
+        case 'init_roles':
+            role_events.emit('init', message.roles);
+            player_roles = message.roles;
+            break;
+        case 'added_roles':
+            role_events.emit('added_roles', message.roles, message.name);
+            player_roles = message.new_roles;
+            break;
+        case 'removed_roles':
+            role_events.emit('removed_roles', message.roles, message.name);
+            player_roles = message.new_roles;
+            break;
+        default:
+            console.log(`Unkown type ${data.type}`);
+            break;
     }
 }
