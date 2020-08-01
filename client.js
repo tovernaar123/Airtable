@@ -1,19 +1,13 @@
 "use strict";
 const WebSocket = require("ws");
 const fs = require("fs").promises;
-const events = require('events');
-
-let player_roles = {};
-const role_events = new events.EventEmitter();
-role_events.on("newListener", (event, listener) => {
-    if (event === "init") {
-        if (Object.keys(player_roles).length !== 0) {
-            listener(player_roles);
-        }
-    }
-});
 const { started_game, stopped_game } = require('./airtable.js');
 const { lua_array, print_error } = require('./helpers.js');
+const events = require('events');
+
+
+let player_roles = {};
+
 
 
 let servers;
@@ -90,39 +84,6 @@ async function server_connected(ip, server) {
     //Get all mini games the server can run
     let result = await server.rcon.send(`/interface return game.table_to_json(mini_games.available)`);
 
-    server.player_roles_init = async function(players_roles) {
-        await server.rcon.send(`/interface 
-        Roles.override_player_roles(
-            game.json_to_table('${JSON.stringify(players_roles)}')
-        )`.replace(/\r?\n +/g, ' ')
-        );
-    };
-
-    server.added_roles = async function (roles, name) {
-        await server.rcon.send(`/interface
-        Roles.assign_player(
-            '${name}',
-            game.json_to_table('${JSON.stringify(roles)}'), 
-            nil, 
-            true, 
-            true
-        )`.replace(/\r?\n +/g, ' '));
-    };
-
-    server.removed_roles = async function (roles, name) {
-        await server.rcon.send(`/interface
-        Roles.unassign_player(
-            '${name}',
-            game.json_to_table('${JSON.stringify(roles)}'), 
-            nil, 
-            true, 
-            true
-        )`.replace(/\r?\n +/g, ' '));
-    };
-
-    role_events.on('init', server.player_roles_init);
-    role_events.on('added_roles', server.added_roles);
-    role_events.on('removed_roles', server.removed_roles);
     //Remove the command complete line
     result = result.split('\n')[0];
     server.games = lua_array(JSON.parse(result));
@@ -132,9 +93,6 @@ async function server_connected(ip, server) {
 
 function server_disconnected(ip, server) {
     server.online = false;
-    role_events.removeListener('removed_roles', server.removed_roles);
-    role_events.removeListener('init', server.player_roles_init);
-    role_events.removeListener('added_roles', server.added_roles);
     send_server_list();
 }
 
@@ -193,11 +151,11 @@ async function on_message(message) {
     console.log(`data recieved: ${JSON.stringify(message, null, 4)}`);
     switch (message.type) {
         case 'start_game':
-            let server = servers.get(message.server);
-            if (server && server.rcon.authenticated) {
-                await server.rcon.send(`/start ${message.name} ${message.player_count} ${message.args}`);
+            let game_server = servers.get(message.server);
+            if (game_server && server.rcon.authenticated) {
+                await game_server.rcon.send(`/start ${message.name} ${message.player_count} ${message.args}`);
             } else {
-                console.log(`Received start for unavailable server ${message.server}`);
+                console.log(`Received start for unavailable server ${message.game_server}`);
             }
             break;
         case 'connected':
@@ -215,15 +173,45 @@ async function on_message(message) {
             }
             break;
         case 'init_roles':
-            role_events.emit('init', message.roles);
+            for (let [key, server] of servers) {
+                if (server.online) {
+                    await server.rcon.send(`/interface 
+                    Roles.override_player_roles(
+                        game.json_to_table('${JSON.stringify(message.roles)}')
+                    )`.replace(/\r?\n +/g, ' ')
+                    );
+                }
+            }
             player_roles = message.roles;
             break;
         case 'added_roles':
-            role_events.emit('added_roles', message.roles, message.name);
+            for (let [key, server] of servers) {
+                if (server.online) {
+                    await server.rcon.send(`/interface
+                    Roles.assign_player(
+                        '${message.name}',
+                        game.json_to_table('${JSON.stringify(message.role)}'), 
+                        nil, 
+                        true, 
+                        true
+                    )`.replace(/\r?\n +/g, ' '));
+                }
+            }
             player_roles = message.new_roles;
             break;
         case 'removed_roles':
-            role_events.emit('removed_roles', message.roles, message.name);
+            for (let [key, server] of servers) {
+                if (server.online) {
+                    await server.rcon.send(`/interface
+                    Roles.unassign_player(
+                        '${message.name}',
+                        game.json_to_table('${JSON.stringify(message.role)}'), 
+                        nil, 
+                        true, 
+                        true
+                    )`.replace(/\r?\n +/g, ' '));
+                }
+            }
             player_roles = message.new_roles;
             break;
         default:

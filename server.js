@@ -47,9 +47,6 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
     console.log("running as server");
     servers = init_servers;
 
-    //dont await as that will cause problems;
-    airtable_init(base);
-
     //Find the lobby server among the local servers.
     let lobby_servers = [];
     for (let [ip, server] of servers) {
@@ -140,6 +137,7 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
             print_winners(lua_array(event.results)).catch(print_error("calling print_winners for local game"));
         }, 20000);
     });
+    await airtable_init(base);
 
     //start the HTTPS/WebSocket server
     await start_server(
@@ -222,9 +220,21 @@ async function server_connected(ip, server) {
             true
         )`.replace(/\r?\n +/g, ' '));
     };
-    airtable_events.on('init', server.player_roles_init);
-    airtable_events.on('added_roles', server.added_roles);
-    airtable_events.on('removed_roles', server.removed_roles);
+    airtable_events.on('init', function(players_roles) {
+        server.player_roles_init(players_roles).catch((err) => {
+            console.error(err);
+        });
+    });
+    airtable_events.on('added_roles', function(roles, name) {
+        server.added_roles(roles, name).catch((err) => {
+            console.error(err);
+        });
+    });
+    airtable_events.on('removed_roles', function(roles, name) {
+        server.removed_roles(roles, name).catch((err) => {
+            console.error(err);
+        });
+    });
 
     server.online = true;
     await update_lobby_server_list();
@@ -274,12 +284,7 @@ async function update_lobby_server_list() {
 //Create WebSocket server and set up event handlers for it.
 const wss = new WebSocket.Server({ noServer: true });
 wss.on("connection", function(ws, request) {
-    if (airtable_init_done) {
-        ws.send(JSON.stringify({
-            "type": 'init_roles',
-            "roles": player_roles,
-        }));
-    }
+
     //Print the ip of the new connetion.
     console.log(`Received connection from ${request.socket.remoteAddress}`);
 
@@ -295,6 +300,12 @@ wss.on("connection", function(ws, request) {
         "lobby_ip": lobby_ip,
     }));
 
+    if (airtable_init_done) {
+        ws.send(JSON.stringify({
+            "type": 'init_roles',
+            "roles": player_roles,
+        }));
+    }
     ws.on("message", function(message) {
         on_message(client_data, JSON.parse(message)).catch(err => {
             console.log("Error handling message", err);
