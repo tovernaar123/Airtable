@@ -1,8 +1,0 @@
-{
-    "127.0.0.1:12345": {
-        "dir": "C:/Users/Jos/Downloads/Factorio_Lobby/Factorio_0.18.32/script-output/mini_games",
-        "Rcon_pass": "S7i067ccm2QyCK#XXP$",
-        "Rcon_port": 4444,
-        "is_lobby": true
-    }
-}
