@@ -173,6 +173,37 @@ async function print_winners(results) {
     if (places.has(3)) { await print('#CD7f32', "3rd", places.get(3)); }
 }
 
+
+//airtable event funcs
+let removed_roles = async function (roles, name) {
+    await server.rcon.send(`/interface
+    Roles.unassign_player(
+        '${name}',
+        game.json_to_table('${JSON.stringify(roles)}'), 
+        nil, 
+        true, 
+        true
+    )`.replace(/\r?\n +/g, ' '));
+};
+
+let added_roles = async function (roles, name) {
+    await server.rcon.send(`/interface
+    Roles.assign_player(
+        '${name}',
+        game.json_to_table('${JSON.stringify(roles)}'), 
+        nil, 
+        true, 
+        true
+    )`.replace(/\r?\n +/g, ' '));
+};
+
+let player_roles_init = async function(players_roles) {
+    await server.rcon.send(`/interface 
+    Roles.override_player_roles(
+        game.json_to_table('${JSON.stringify(players_roles)}')
+    )`.replace(/\r?\n +/g, ' ')
+    );
+};
 //server setup
 async function server_connected(ip, server) {
     //telling the server if this the lobby
@@ -193,48 +224,24 @@ async function server_connected(ip, server) {
         result = result.split('\n')[0];
         server.games = lua_array(JSON.parse(result));
     }
-    server.player_roles_init = async function(players_roles) {
-        await server.rcon.send(`/interface 
-        Roles.override_player_roles(
-            game.json_to_table('${JSON.stringify(players_roles)}')
-        )`.replace(/\r?\n +/g, ' ')
-        );
-    };
-    server.added_roles = async function (roles, name) {
-        await server.rcon.send(`/interface
-        Roles.assign_player(
-            '${name}',
-            game.json_to_table('${JSON.stringify(roles)}'), 
-            nil, 
-            true, 
-            true
-        )`.replace(/\r?\n +/g, ' '));
-    };
-    server.removed_roles = async function (roles, name) {
-        await server.rcon.send(`/interface
-        Roles.unassign_player(
-            '${name}',
-            game.json_to_table('${JSON.stringify(roles)}'), 
-            nil, 
-            true, 
-            true
-        )`.replace(/\r?\n +/g, ' '));
-    };
-    airtable_events.on('init', function(players_roles) {
-        server.player_roles_init(players_roles).catch((err) => {
+    server.player_roles_init = function(players_roles) {
+        player_roles_init(players_roles).catch((err) => {
             console.error(err);
         });
-    });
-    airtable_events.on('added_roles', function(roles, name) {
-        server.added_roles(roles, name).catch((err) => {
+    };
+    server.added_roles = function(roles, name) {
+        added_roles(roles, name).catch((err) => {
             console.error(err);
         });
-    });
-    airtable_events.on('removed_roles', function(roles, name) {
-        server.removed_roles(roles, name).catch((err) => {
+    };
+    server.removed_roles = function(roles, name) {
+        removed_roles(roles, name).catch((err) => {
             console.error(err);
         });
-    });
+    };
+    airtable_events.on('init', server.player_roles_init);
+    airtable_events.on('added_roles', server.added_roles);
+    airtable_events.on('removed_roles', server.removed_roles);
 
     server.online = true;
     await update_lobby_server_list();
@@ -242,9 +249,9 @@ async function server_connected(ip, server) {
 
 async function server_disconnected(ip, server) {
     server.online = false;
-    airtable_events.removeListener('removed_roles', server.removed_roles);
     airtable_events.removeListener('init', server.player_roles_init);
     airtable_events.removeListener('added_roles', server.added_roles);
+    airtable_events.removeListener('removed_roles', server.removed_roles);
     console.log(airtable_events);
     await update_lobby_server_list();
 }

@@ -149,45 +149,41 @@ function connect_websocket(url, token, cert) {
 //Invoked when a message is received from the WebSocket server.
 async function on_message(message) {
     console.log(`data recieved: ${JSON.stringify(message, null, 4)}`);
-    switch (message.type) {
-        case 'start_game':
-            let game_server = servers.get(message.server);
-            if (game_server && server.rcon.authenticated) {
-                await game_server.rcon.send(`/start ${message.name} ${message.player_count} ${message.args}`);
-            } else {
-                console.log(`Received start for unavailable server ${message.game_server}`);
-            }
-            break;
-        case 'connected':
-            //Update main server's list of server
-            send_server_list();
+    if (message.type === 'start_game') {
+        let game_server = servers.get(message.server);
+        if (game_server && server.rcon.authenticated) {
+            await game_server.rcon.send(`/start ${message.name} ${message.player_count} ${message.args}`);
+        } else {
+            console.log(`Received start for unavailable server ${message.game_server}`);
+        }
+    } else if (message.type === 'connected') {
+        //Update main server's list of server
+        send_server_list();
 
-            //Update stored lobby ip
-            lobby_ip = message.lobby_ip;
+        //Update stored lobby ip
+        lobby_ip = message.lobby_ip;
 
-            //loop over all the local server and set the lobby
-            for (let connected_server of servers.values()) {
-                if (connected_server.rcon.authenticated) {
-                    await connected_server.rcon.send(`/interface global.servers = {lobby = '${lobby_ip}'}`);
-                }
+        //loop over all the local server and set the lobby
+        for (let connected_server of servers.values()) {
+            if (connected_server.rcon.authenticated) {
+                await connected_server.rcon.send(`/interface global.servers = {lobby = '${lobby_ip}'}`);
             }
-            break;
-        case 'init_roles':
-            for (let [key, server] of servers) {
-                if (server.online) {
-                    await server.rcon.send(`/interface 
+        }
+    } else if (message.type === 'init_roles') {
+        for (let [key, server] of servers) {
+            if (server.online) {
+                await server.rcon.send(`/interface 
                     Roles.override_player_roles(
                         game.json_to_table('${JSON.stringify(message.roles)}')
                     )`.replace(/\r?\n +/g, ' ')
-                    );
-                }
+                );
             }
-            player_roles = message.roles;
-            break;
-        case 'added_roles':
-            for (let [key, server] of servers) {
-                if (server.online) {
-                    await server.rcon.send(`/interface
+        }
+        player_roles = message.roles;
+    } else if (message.type === 'added_roles') {
+        for (let [key, server] of servers) {
+            if (server.online) {
+                await server.rcon.send(`/interface
                     Roles.assign_player(
                         '${message.name}',
                         game.json_to_table('${JSON.stringify(message.role)}'), 
@@ -195,14 +191,13 @@ async function on_message(message) {
                         true, 
                         true
                     )`.replace(/\r?\n +/g, ' '));
-                }
             }
-            player_roles = message.new_roles;
-            break;
-        case 'removed_roles':
-            for (let [key, server] of servers) {
-                if (server.online) {
-                    await server.rcon.send(`/interface
+        }
+        player_roles = message.new_roles;
+    } else if (message.type === 'removed_roles') {
+        for (let [key, server] of servers) {
+            if (server.online) {
+                await server.rcon.send(`/interface
                     Roles.unassign_player(
                         '${message.name}',
                         game.json_to_table('${JSON.stringify(message.role)}'), 
@@ -210,12 +205,10 @@ async function on_message(message) {
                         true, 
                         true
                     )`.replace(/\r?\n +/g, ' '));
-                }
             }
-            player_roles = message.new_roles;
-            break;
-        default:
-            console.log(`Unkown type ${data.type}`);
-            break;
+        }
+        player_roles = message.new_roles;
+    } else {
+        console.log(`Unkown type ${data.type}`);
     }
 }
