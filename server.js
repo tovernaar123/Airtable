@@ -4,7 +4,7 @@ const https = require("https");
 const jwt = require("jsonwebtoken");
 const WebSocket = require("ws");
 
-const { started_game, stopped_game } = require('./airtable.js');
+const { stopped_game, started_game, init: airtable_init, airtable_events, player_roles} = require('./airtable.js');
 const { lua_array, print_error } = require('./helpers.js');
 
 
@@ -12,6 +12,37 @@ let socket_to_client_data = new Map();
 let lobby_server;
 let lobby_ip;
 let servers;
+let airtable_init_done = false;
+airtable_events.on('init', (roles) => {
+    for (let [ws, value] of socket_to_client_data.entries()) {
+        ws.send(JSON.stringify({
+            "type": 'init_roles',
+            "roles": roles,
+        }));
+    }
+    airtable_init_done = true;
+});
+airtable_events.on('added_roles', (roles, name) => {
+    for (let [ws, value] of socket_to_client_data.entries()) {
+        ws.send(JSON.stringify({
+            "type": 'added_roles',
+            "name": name,
+            "roles": roles,
+            'new_roles': player_roles,
+        }));
+    }
+});
+airtable_events.on('removed_roles', (roles, name) => {
+    for (let [ws, value] of socket_to_client_data.entries()) {
+        ws.send(JSON.stringify({
+            "type": 'removed_roles',
+            "name": name,
+            "roles": roles,
+            'new_roles': player_roles,
+        }));
+    }
+});
+
 exports.init = async function(config, init_servers, base, file_events, rcon_events) {
     console.log("running as server");
     servers = init_servers;
@@ -106,6 +137,7 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
             print_winners(lua_array(event.results)).catch(print_error("calling print_winners for local game"));
         }, 20000);
     });
+    await airtable_init(base);
 
     //start the HTTPS/WebSocket server
     await start_server(
@@ -115,6 +147,8 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
         config.tls_cert_file,
     );
 };
+
+
 
 //Print the 1st, 2nd and 3rd place for a game on the lobby server
 async function print_winners(results) {
@@ -139,6 +173,37 @@ async function print_winners(results) {
     if (places.has(3)) { await print('#CD7f32', "3rd", places.get(3)); }
 }
 
+
+//airtable event funcs
+let removed_roles = async function (roles, name) {
+    await server.rcon.send(`/interface
+    Roles.unassign_player(
+        '${name}',
+        game.json_to_table('${JSON.stringify(roles)}'), 
+        nil, 
+        true, 
+        true
+    )`.replace(/\r?\n +/g, ' '));
+};
+
+let added_roles = async function (roles, name) {
+    await server.rcon.send(`/interface
+    Roles.assign_player(
+        '${name}',
+        game.json_to_table('${JSON.stringify(roles)}'), 
+        nil, 
+        true, 
+        true
+    )`.replace(/\r?\n +/g, ' '));
+};
+
+let player_roles_init = async function(players_roles) {
+    await server.rcon.send(`/interface 
+    Roles.override_player_roles(
+        game.json_to_table('${JSON.stringify(players_roles)}')
+    )`.replace(/\r?\n +/g, ' ')
+    );
+};
 //server setup
 async function server_connected(ip, server) {
     //telling the server if this the lobby
@@ -159,6 +224,24 @@ async function server_connected(ip, server) {
         result = result.split('\n')[0];
         server.games = lua_array(JSON.parse(result));
     }
+    server.player_roles_init = function(players_roles) {
+        player_roles_init(players_roles).catch((err) => {
+            console.error(err);
+        });
+    };
+    server.added_roles = function(roles, name) {
+        added_roles(roles, name).catch((err) => {
+            console.error(err);
+        });
+    };
+    server.removed_roles = function(roles, name) {
+        removed_roles(roles, name).catch((err) => {
+            console.error(err);
+        });
+    };
+    airtable_events.on('init', server.player_roles_init);
+    airtable_events.on('added_roles', server.added_roles);
+    airtable_events.on('removed_roles', server.removed_roles);
 
     server.online = true;
     await update_lobby_server_list();
@@ -166,6 +249,10 @@ async function server_connected(ip, server) {
 
 async function server_disconnected(ip, server) {
     server.online = false;
+    airtable_events.removeListener('init', server.player_roles_init);
+    airtable_events.removeListener('added_roles', server.added_roles);
+    airtable_events.removeListener('removed_roles', server.removed_roles);
+    console.log(airtable_events);
     await update_lobby_server_list();
 }
 
@@ -204,6 +291,7 @@ async function update_lobby_server_list() {
 //Create WebSocket server and set up event handlers for it.
 const wss = new WebSocket.Server({ noServer: true });
 wss.on("connection", function(ws, request) {
+
     //Print the ip of the new connetion.
     console.log(`Received connection from ${request.socket.remoteAddress}`);
 
@@ -219,6 +307,12 @@ wss.on("connection", function(ws, request) {
         "lobby_ip": lobby_ip,
     }));
 
+    if (airtable_init_done) {
+        ws.send(JSON.stringify({
+            "type": 'init_roles',
+            "roles": player_roles,
+        }));
+    }
     ws.on("message", function(message) {
         on_message(client_data, JSON.parse(message)).catch(err => {
             console.log("Error handling message", err);
