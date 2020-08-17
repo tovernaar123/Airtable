@@ -175,7 +175,7 @@ async function print_winners(results) {
 
 
 //airtable event funcs
-let removed_roles = async function (roles, name) {
+let removed_roles = async function (roles, name, server) {
     await server.rcon.send(`/interface
     Roles.unassign_player(
         '${name}',
@@ -186,7 +186,7 @@ let removed_roles = async function (roles, name) {
     )`.replace(/\r?\n +/g, ' '));
 };
 
-let added_roles = async function (roles, name) {
+let added_roles = async function (roles, name, server) {
     await server.rcon.send(`/interface
     Roles.assign_player(
         '${name}',
@@ -197,7 +197,7 @@ let added_roles = async function (roles, name) {
     )`.replace(/\r?\n +/g, ' '));
 };
 
-let player_roles_init = async function(players_roles) {
+let player_roles_init = async function(players_roles, server) {
     await server.rcon.send(`/interface 
     Roles.override_player_roles(
         game.json_to_table('${JSON.stringify(players_roles)}')
@@ -225,17 +225,17 @@ async function server_connected(ip, server) {
         server.games = lua_array(JSON.parse(result));
     }
     server.player_roles_init = function(players_roles) {
-        player_roles_init(players_roles).catch((err) => {
+        player_roles_init(players_roles, server).catch((err) => {
             console.error(err);
         });
     };
     server.added_roles = function(roles, name) {
-        added_roles(roles, name).catch((err) => {
+        added_roles(roles, name, server).catch((err) => {
             console.error(err);
         });
     };
     server.removed_roles = function(roles, name) {
-        removed_roles(roles, name).catch((err) => {
+        removed_roles(roles, name, server).catch((err) => {
             console.error(err);
         });
     };
