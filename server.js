@@ -82,7 +82,7 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
         if (servers.has(event.server)) {
             let target_server = servers.get(event.server);
             if (target_server.rcon.authenticated) {
-                target_server.rcon.send(`/start ${event.name} ${event.player_count} ${event.args.join(' ')}`).catch(
+                target_server.rcon.send(`/start "${event.name}" ${event.player_count} ${event.args.join(' ')}`).catch(
                     print_error("sending /start command to local server")
                 );
 

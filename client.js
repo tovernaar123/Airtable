@@ -152,7 +152,7 @@ async function on_message(message) {
     if (message.type === 'start_game') {
         let game_server = servers.get(message.server);
         if (game_server && server.rcon.authenticated) {
-            await game_server.rcon.send(`/start ${message.name} ${message.player_count} ${message.args}`);
+            await game_server.rcon.send(`/start "${message.name}" ${message.player_count} ${message.args}`);
         } else {
             console.log(`Received start for unavailable server ${message.game_server}`);
         }
