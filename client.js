@@ -41,6 +41,7 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
     });
 
     file_events.on("stopped_game", async function(server, event) {
+        server.game_running = false;
         if (server.record_id) {
             let record_id = server.record_id;
             server.record_id = null;
@@ -93,6 +94,7 @@ async function server_connected(ip, server) {
 
 function server_disconnected(ip, server) {
     server.online = false;
+    server.game_running = false;
     send_server_list();
 }
 
@@ -107,6 +109,7 @@ function send_server_list() {
         if (server.online) {
             server_list[ip] = {
                 "games": server.games || [],
+                "game_running": server.game_running,
             };
         }
     }
@@ -151,6 +154,7 @@ async function on_message(message) {
     console.log(`data recieved: ${JSON.stringify(message, null, 4)}`);
     if (message.type === 'start_game') {
         let game_server = servers.get(message.server);
+        game_server.game_running = true;
         if (game_server && server.rcon.authenticated) {
             await game_server.rcon.send(`/start "${message.name}" ${message.player_count} ${message.args}`);
         } else {
