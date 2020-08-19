@@ -77,6 +77,15 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
 
     file_events.on("start_cancelled", function(server, event) {
         server.game_running = false;
+        server.rcon.send('/sc game.print("Returning to lobby in 5 sec")').catch(console.error);
+        setTimeout(async function() {
+            await server.rcon.send("/lobby_all");
+        }, 5000);
+
+        //In 20 sec kick all players
+        setTimeout(async function() {
+            await server.rcon.send("/kick_all");
+        }, 15000);
         clean_up_running_games().catch(console.error);
         update_lobby_server_list().catch(console.error);
     });
