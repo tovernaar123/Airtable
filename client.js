@@ -41,7 +41,7 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
     });
 
     file_events.on("stopped_game", async function(server, event) {
-        server.game_running = false;
+        server.game_running = null;
         if (server.record_id) {
             let record_id = server.record_id;
             server.record_id = null;
@@ -61,6 +61,7 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
         }, 20000);
 
         websocket.send(JSON.stringify(event));
+        send_server_list();
     });
     file_events.on("start_cancelled", function(server, event) {
         server.rcon.send('/sc game.print("Returning to lobby in 5 sec")').catch(console.error);
@@ -72,7 +73,7 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
         setTimeout(async function() {
             await server.rcon.send("/kick_all");
         }, 15000);
-        server.game_running = false;
+        server.game_running = null;
         send_server_list();
     });
 
@@ -107,7 +108,7 @@ async function server_connected(ip, server) {
 
 function server_disconnected(ip, server) {
     server.online = false;
-    server.game_running = false;
+    server.game_running = null;
     send_server_list();
 }
 

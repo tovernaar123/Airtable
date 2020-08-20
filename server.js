@@ -12,7 +12,6 @@ let socket_to_client_data = new Map();
 let lobby_server;
 let lobby_ip;
 let servers;
-let running_games = new Map();
 let airtable_init_done = false;
 airtable_events.on('init', (roles) => {
     for (let [ws, value] of socket_to_client_data.entries()) {
@@ -76,7 +75,7 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
     });
 
     file_events.on("start_cancelled", function(server, event) {
-        server.game_running = false;
+        server.game_running = null;
         server.rcon.send('/sc game.print("Returning to lobby in 5 sec")').catch(console.error);
         setTimeout(async function() {
             await server.rcon.send("/lobby_all");
@@ -86,59 +85,22 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
         setTimeout(async function() {
             await server.rcon.send("/kick_all");
         }, 15000);
-        clean_up_running_games().catch(console.error);
-        update_lobby_server_list().catch(console.error);
+        update_lobby_server_list().catch(print_error("during start_cancelled"));
     });
     //when the start_game game event is run in file_listener this function will run
-    file_events.on("start_game", function(_, event) {
-        let _server = event.server;
-        let server_data = {
-            lobby: lobby_ip,
-        };
-
-
-        //get the server list
-        for (let [ip, server] of servers) {
-            if (server.online) {
-                for (let game of server.games || []) {
-                    (server_data[game] || (server_data[game] = [])).push(ip);
-                }
-            }
-        }
-        //get the server list
-        for (let client_data of socket_to_client_data.values()) {
-            for (let [ip, server] of Object.entries(client_data.servers)) {
-                for (let game of server.games) {
-                    (server_data[game] || (server_data[game] = [])).push(ip);
-                }
-            }
-        }
-
-        //remove the server
-        for (const [key, _servers] of Object.entries(server_data)) {
-            if (key === 'lobby') { continue; };
-            server_data[key] = _servers.filter(item => item !== _server);
-            running_games.set(_server, event.name);
-        }
-        if (lobby_server.rcon.authenticated) {
-            lobby_server.rcon.send(`/interface global.servers = game.json_to_table('${JSON.stringify(server_data)}')`)
-                .catch(console.error);
-            let json = JSON.stringify(running_games);
-            lobby_server.rcon.send(`/interface global.running_servers = game.json_to_table('${json}')`)
-                .catch(console.error);
-        }
-
+    file_events.on("start_game", function(server, event) {
         //log the argmunts
         console.log(`game arguments are ${JSON.stringify(event.args)}`);
+
         //Checking if the server is local
         if (servers.has(event.server)) {
             let target_server = servers.get(event.server);
-            target_server.game_running = true;
-            servers.set(event.server, target_server);
             if (target_server.rcon.authenticated) {
                 target_server.rcon.send(`/start "${event.name}" ${event.player_count} ${event.args.join(' ')}`).catch(
                     print_error("sending /start command to local server")
                 );
+                target_server.game_running = event.name;
+                update_lobby_server_list().catch(print_error("updating lobby during start_game"));
 
             } else {
                 console.log(`Received start for unavailable server ${event.server}`);
@@ -150,8 +112,6 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
             let ws;
             for (let [client_ws, client_data] of socket_to_client_data) {
                 if (client_data.servers[event.server]) {
-                    client_data.servers[event.server].game_running = true;
-                    socket_to_client_data.set(client_ws, client_data);
                     ws = client_ws;
                     break;
                 }
@@ -165,13 +125,12 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
                 console.log(`Received start for unavailable server ${event.server}`);
             }
         }
-        update_lobby_server_list().catch(console.error);
     });
 
     file_events.on("stopped_game", function(server, event) {
-        server.game_running = false;
-        clean_up_running_games().catch(console.error);
-        update_lobby_server_list().catch(console.error);
+        server.game_running = null;
+        update_lobby_server_list().catch(print_error("updating lobby server on stopped_game"));
+
         if (server.record_id) {
             let record_id = server.record_id;
             server.record_id = null;
@@ -309,31 +268,12 @@ async function server_connected(ip, server) {
 
 async function server_disconnected(ip, server) {
     server.online = false;
-    server.game_running = false;
-    clean_up_running_games().catch(console.error);
+    server.game_running = null;
     airtable_events.removeListener('init', server.player_roles_init);
     airtable_events.removeListener('added_roles', server.added_roles);
     airtable_events.removeListener('removed_roles', server.removed_roles);
     console.log(airtable_events);
     await update_lobby_server_list();
-}
-
-//this func deletes all entries in running_games that are invalid and then send that to the lobby.
-async function clean_up_running_games() {
-    for (let [ip, server] of servers) {
-        if (!server.game_running) {
-            running_games.delete(ip);
-        };
-    }
-    for (let client_data of socket_to_client_data.values()) {
-        for (let [ip, server] of Object.entries(client_data.servers)) {
-            if (!server.game_running) {
-                running_games.delete(ip);
-            };
-        }
-    }
-    let json = JSON.stringify(running_games);
-    await lobby_server.rcon.send(`/interface global.running_servers = game.json_to_table('${json}')`);
 }
 
 async function update_lobby_server_list() {
@@ -345,13 +285,17 @@ async function update_lobby_server_list() {
     let server_data = {
         lobby: lobby_ip,
     };
+    let running_servers = {};
 
     //Add games for local servers.
     for (let [ip, server] of servers) {
-        if (server.game_running) { continue; };
         if (server.online) {
-            for (let game of server.games || []) {
-                (server_data[game] || (server_data[game] = [])).push(ip);
+            if (server.game_running) {
+                running_servers[ip] = server.game_running;
+            } else {
+                for (let game of server.games || []) {
+                    (server_data[game] || (server_data[game] = [])).push(ip);
+                }
             }
         }
     }
@@ -359,15 +303,21 @@ async function update_lobby_server_list() {
     //Add games for remote servers.
     for (let client_data of socket_to_client_data.values()) {
         for (let [ip, server] of Object.entries(client_data.servers)) {
-            if (server.game_running) { continue; };
-            for (let game of server.games) {
-                (server_data[game] || (server_data[game] = [])).push(ip);
+            if (server.game_running) {
+                running_servers[ip] = server.game_running;
+            } else {
+                for (let game of server.games) {
+                    (server_data[game] || (server_data[game] = [])).push(ip);
+                }
             }
         }
     }
 
     //Update servers on the lobby server.
-    await lobby_server.rcon.send(`/interface global.servers = game.json_to_table('${JSON.stringify(server_data)}')`);
+    await lobby_server.rcon.send(`/interface
+        global.servers = game.json_to_table('${JSON.stringify(server_data)}')
+        global.running_servers = game.json_to_table('${JSON.stringify(running_servers)}')
+    `.replace(/\r?\n +/g, ' '));
 }
 
 //Create WebSocket server and set up event handlers for it.
@@ -442,7 +392,6 @@ async function on_message(client_data, message) {
     //Check the key type of data to see what action to take
     if (message.type === "server_list") {
         client_data.servers = message.servers;
-        clean_up_running_games().catch(console.error);
         await update_lobby_server_list();
 
     } else if (message.type === "stopped_game") {
