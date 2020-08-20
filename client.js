@@ -149,7 +149,7 @@ function connect_websocket(url, token, cert) {
         //empty
     });
     ws.on("message", function(message) {
-        on_message(JSON.parse(message)).catch(print_error(`on_message(${message.type}) failed`));
+        on_message(JSON.parse(message)).catch(print_error(`on_message(${message}) failed`));
     });
     ws.on("error", function(error) {
         console.error("WebSocket connection error:", error.message);
@@ -167,12 +167,13 @@ function connect_websocket(url, token, cert) {
 async function on_message(message) {
     console.log(`data recieved: ${JSON.stringify(message, null, 4)}`);
     if (message.type === 'start_game') {
-        let game_server = servers.get(message.server);
-        game_server.game_running = true;
-        if (game_server && server.rcon.authenticated) {
-            await game_server.rcon.send(`/start "${message.name}" ${message.player_count} ${message.args}`);
+        let server = servers.get(message.server);
+        if (server && server.rcon.authenticated) {
+            await server.rcon.send(`/start "${message.name}" ${message.player_count} ${message.args.join(' ')}`);
+            server.game_running = message.name;
+            send_server_list();
         } else {
-            console.log(`Received start for unavailable server ${message.game_server}`);
+            console.log(`Received start for unavailable server ${message.server}`);
         }
     } else if (message.type === 'connected') {
         //Update main server's list of server
