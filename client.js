@@ -76,6 +76,16 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
         server.game_running = null;
         send_server_list();
     });
+    file_events.on("amount_of_players", function(server, event) {
+        let ip;
+        for (let [_ip, _server] of servers) {
+            if (_server === server) {
+                ip = _ip;
+            }
+        }
+        //lobby_server.rcon.send(`/interface mini_games.set_online_player_count(${event.amount}, "${ip}") `);
+        websocket.send(JSON.stringify({ "type": amount_of_players, "amount": event.amount, "ip": ip}));
+    });
 
     //Load tls certificate for websocket connection if it is configured
     let cert = config.tls_cert_file ? await fs.readFile(config.tls_cert_file) : null;
