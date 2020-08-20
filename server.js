@@ -313,7 +313,7 @@ async function update_lobby_server_list() {
             if (server.game_running) {
                 running_servers[ip] = server.game_running;
             } else {
-                for (let game of server.games || []) {
+                for (let game of server.games) {
                     (server_data[game] || (server_data[game] = [])).push(ip);
                 }
             }

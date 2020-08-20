@@ -36,6 +36,13 @@ async function start() {
     const file_events = file_listener.watch_files(servers);
     const rcon_events = rcon_connector.connect_to_servers(servers);
 
+    for (let server of servers.values()) {
+        server.games = [];
+        server.online = false;
+        server.game_running = null;
+        server.is_lobby = Boolean(server.is_lobby);
+    }
+
     await side.init(config, servers, base, file_events, rcon_events);
 }
 

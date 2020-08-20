@@ -136,7 +136,7 @@ function send_server_list() {
     for (let [ip, server] of servers) {
         if (server.online) {
             server_list[ip] = {
-                "games": server.games || [],
+                "games": server.games,
                 "game_running": server.game_running,
             };
         }
