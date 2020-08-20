@@ -73,6 +73,20 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
             server.record_id = record_id;
         }).catch(print_error("calling started_game"));
     });
+
+    file_events.on("start_cancelled", function(server, event) {
+        server.game_running = null;
+        server.rcon.send('/sc game.print("Returning to lobby in 5 sec")').catch(console.error);
+        setTimeout(async function() {
+            await server.rcon.send("/lobby_all");
+        }, 5000);
+
+        //In 20 sec kick all players
+        setTimeout(async function() {
+            await server.rcon.send("/kick_all");
+        }, 15000);
+        update_lobby_server_list().catch(print_error("during start_cancelled"));
+    });
     //when the start_game game event is run in file_listener this function will run
     file_events.on("start_game", function(server, event) {
         //log the argmunts
@@ -85,6 +99,8 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
                 target_server.rcon.send(`/start "${event.name}" ${event.player_count} ${event.args.join(' ')}`).catch(
                     print_error("sending /start command to local server")
                 );
+                target_server.game_running = event.name;
+                update_lobby_server_list().catch(print_error("updating lobby during start_game"));
 
             } else {
                 console.log(`Received start for unavailable server ${event.server}`);
@@ -112,6 +128,9 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
     });
 
     file_events.on("stopped_game", function(server, event) {
+        server.game_running = null;
+        update_lobby_server_list().catch(print_error("updating lobby server on stopped_game"));
+
         if (server.record_id) {
             let record_id = server.record_id;
             server.record_id = null;
@@ -249,6 +268,7 @@ async function server_connected(ip, server) {
 
 async function server_disconnected(ip, server) {
     server.online = false;
+    server.game_running = null;
     airtable_events.removeListener('init', server.player_roles_init);
     airtable_events.removeListener('added_roles', server.added_roles);
     airtable_events.removeListener('removed_roles', server.removed_roles);
@@ -265,12 +285,17 @@ async function update_lobby_server_list() {
     let server_data = {
         lobby: lobby_ip,
     };
+    let running_servers = {};
 
     //Add games for local servers.
     for (let [ip, server] of servers) {
         if (server.online) {
-            for (let game of server.games || []) {
-                (server_data[game] || (server_data[game] = [])).push(ip);
+            if (server.game_running) {
+                running_servers[ip] = server.game_running;
+            } else {
+                for (let game of server.games || []) {
+                    (server_data[game] || (server_data[game] = [])).push(ip);
+                }
             }
         }
     }
@@ -278,14 +303,21 @@ async function update_lobby_server_list() {
     //Add games for remote servers.
     for (let client_data of socket_to_client_data.values()) {
         for (let [ip, server] of Object.entries(client_data.servers)) {
-            for (let game of server.games) {
-                (server_data[game] || (server_data[game] = [])).push(ip);
+            if (server.game_running) {
+                running_servers[ip] = server.game_running;
+            } else {
+                for (let game of server.games) {
+                    (server_data[game] || (server_data[game] = [])).push(ip);
+                }
             }
         }
     }
 
     //Update servers on the lobby server.
-    await lobby_server.rcon.send(`/interface global.servers = game.json_to_table('${JSON.stringify(server_data)}')`);
+    await lobby_server.rcon.send(`/interface
+        global.servers = game.json_to_table('${JSON.stringify(server_data)}')
+        global.running_servers = game.json_to_table('${JSON.stringify(running_servers)}')
+    `.replace(/\r?\n +/g, ' '));
 }
 
 //Create WebSocket server and set up event handlers for it.

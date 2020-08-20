@@ -41,6 +41,7 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
     });
 
     file_events.on("stopped_game", async function(server, event) {
+        server.game_running = null;
         if (server.record_id) {
             let record_id = server.record_id;
             server.record_id = null;
@@ -60,6 +61,20 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
         }, 20000);
 
         websocket.send(JSON.stringify(event));
+        send_server_list();
+    });
+    file_events.on("start_cancelled", function(server, event) {
+        server.rcon.send('/sc game.print("Returning to lobby in 5 sec")').catch(console.error);
+        setTimeout(async function() {
+            await server.rcon.send("/lobby_all");
+        }, 5000);
+
+        //In 20 sec kick all players
+        setTimeout(async function() {
+            await server.rcon.send("/kick_all");
+        }, 15000);
+        server.game_running = null;
+        send_server_list();
     });
 
     //Load tls certificate for websocket connection if it is configured
@@ -93,6 +108,7 @@ async function server_connected(ip, server) {
 
 function server_disconnected(ip, server) {
     server.online = false;
+    server.game_running = null;
     send_server_list();
 }
 
@@ -107,6 +123,7 @@ function send_server_list() {
         if (server.online) {
             server_list[ip] = {
                 "games": server.games || [],
+                "game_running": server.game_running,
             };
         }
     }
@@ -132,7 +149,7 @@ function connect_websocket(url, token, cert) {
         //empty
     });
     ws.on("message", function(message) {
-        on_message(JSON.parse(message)).catch(print_error(`on_message(${message.type}) failed`));
+        on_message(JSON.parse(message)).catch(print_error(`on_message(${message}) failed`));
     });
     ws.on("error", function(error) {
         console.error("WebSocket connection error:", error.message);
@@ -150,11 +167,13 @@ function connect_websocket(url, token, cert) {
 async function on_message(message) {
     console.log(`data recieved: ${JSON.stringify(message, null, 4)}`);
     if (message.type === 'start_game') {
-        let game_server = servers.get(message.server);
-        if (game_server && server.rcon.authenticated) {
-            await game_server.rcon.send(`/start "${message.name}" ${message.player_count} ${message.args}`);
+        let server = servers.get(message.server);
+        if (server && server.rcon.authenticated) {
+            await server.rcon.send(`/start "${message.name}" ${message.player_count} ${message.args.join(' ')}`);
+            server.game_running = message.name;
+            send_server_list();
         } else {
-            console.log(`Received start for unavailable server ${message.game_server}`);
+            console.log(`Received start for unavailable server ${message.server}`);
         }
     } else if (message.type === 'connected') {
         //Update main server's list of server
