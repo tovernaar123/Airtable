@@ -34,7 +34,7 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
         console.log(event);
         started_game(base, event.name, lua_array(event.players)).then(record_id => {
             server.record_id = record_id;
-        }).catch(print_err("calling started_game"));
+        }).catch(print_error("calling started_game"));
     });
 
     file_events.on("stopped_game", async function(server, event) {
@@ -109,7 +109,7 @@ async function server_connected(ip, server) {
     if (Object.keys(player_roles).length !== 0) {
         await server.rcon.send(`/interface 
             Roles.override_player_roles(
-                game.json_to_table('${JSON.stringify(message.roles)}')
+                game.json_to_table('${JSON.stringify(player_roles)}')
             )`.replace(/\r?\n +/g, ' ')
         );
     }
@@ -189,8 +189,8 @@ async function on_message(message) {
         } else {
             console.log(`Received start for unavailable server ${message.server}`);
         }
-    } else if (message === 'ping') {
-        websocket.send('pong');
+    } else if (message.type === 'ping') {
+        websocket.send(JSON.stringify({type: 'pong'}));
     } else if (message.type === 'connected') {
         //Update main server's list of server
         send_server_list();
@@ -221,7 +221,7 @@ async function on_message(message) {
                 await server.rcon.send(`/interface
                     Roles.assign_player(
                         '${message.name}',
-                        game.json_to_table('${JSON.stringify(message.role)}'), 
+                        game.json_to_table('${JSON.stringify(message.roles)}'), 
                         nil, 
                         true, 
                         true

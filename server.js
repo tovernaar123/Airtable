@@ -346,7 +346,7 @@ wss.on("connection", function(ws, request) {
     socket_to_client_data.set(ws, client_data);
 
     let intervalt = setInterval(() => {
-        ws.send('ping');
+        ws.send(JSON.stringify({type: 'ping'}));
     }, 5000);
 
     //Signal the connection has been established and send lobby ip
@@ -422,7 +422,7 @@ async function on_message(client_data, message) {
         let ip = message.ip;
         let amount = message.amount;
         await lobby_server.rcon.send(`/interface mini_games.set_online_player_count(${amount}, "${ip}") `);
-    } else if (message === 'pong') {
+    } else if (message.type === 'pong') {
         console.log('ping/pong succes');
     } else {
         console.log(`unkown message ${JSON.stringify(message)} from ${JSON.stringify(client_data)}`);
