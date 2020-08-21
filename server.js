@@ -345,6 +345,10 @@ wss.on("connection", function(ws, request) {
 
     socket_to_client_data.set(ws, client_data);
 
+    let intervalt = setInterval(() => {
+        ws.send('ping');
+    }, 5000);
+
     //Signal the connection has been established and send lobby ip
     ws.send(JSON.stringify({
         "type": "connected",
@@ -367,7 +371,7 @@ wss.on("connection", function(ws, request) {
     ws.on("close", function(code, reason) {
         console.log(`Connection from ${request.socket.remoteAddress} closed`);
         socket_to_client_data.delete(ws);
-
+        clearInterval(intervalt);
         update_lobby_server_list().catch(err => {
             console.log("Error during ws close:", err);
         });
@@ -418,6 +422,10 @@ async function on_message(client_data, message) {
         let ip = message.ip;
         let amount = message.amount;
         await lobby_server.rcon.send(`/interface mini_games.set_online_player_count(${amount}, "${ip}") `);
+    } else if (message === 'pong') {
+        console.log('ping/pong succes');
+    } else {
+        console.log(`unkown message ${JSON.stringify(message)} from ${JSON.stringify(client_data)}`);
     }
 }
 

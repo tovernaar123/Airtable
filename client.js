@@ -3,12 +3,9 @@ const WebSocket = require("ws");
 const fs = require("fs").promises;
 const { started_game, stopped_game } = require('./airtable.js');
 const { lua_array, print_error } = require('./helpers.js');
-const events = require('events');
 
 
 let player_roles = {};
-
-
 
 let servers;
 let websocket;
@@ -109,6 +106,13 @@ async function server_connected(ip, server) {
     //Get all mini games the server can run
     let result = await server.rcon.send(`/interface return game.table_to_json(mini_games.available)`);
 
+    if (Object.keys(player_roles).length !== 0) {
+        await server.rcon.send(`/interface 
+            Roles.override_player_roles(
+                game.json_to_table('${JSON.stringify(message.roles)}')
+            )`.replace(/\r?\n +/g, ' ')
+        );
+    }
     //Remove the command complete line
     result = result.split('\n')[0];
     server.games = lua_array(JSON.parse(result));
@@ -185,6 +189,8 @@ async function on_message(message) {
         } else {
             console.log(`Received start for unavailable server ${message.server}`);
         }
+    } else if (message === 'ping') {
+        websocket.send('pong');
     } else if (message.type === 'connected') {
         //Update main server's list of server
         send_server_list();
