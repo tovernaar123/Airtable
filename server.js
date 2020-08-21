@@ -157,7 +157,7 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
         }, 20000);
     });
 
-    file_events.on("amount_of_players", function(server, event) {
+    file_events.on("player_count_changed", function(server, event) {
         let ip;
         for (let [_ip, _server] of servers) {
             if (_server === server) {
@@ -165,7 +165,7 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
             }
         }
         lobby_server.rcon.send(`/interface mini_games.set_online_player_count(${event.amount}, "${ip}") `)
-            .catch(print_error("during amount_of_players"));
+            .catch(print_error("during player_count_changed"));
     });
     await airtable_init(base);
 
@@ -414,7 +414,7 @@ async function on_message(client_data, message) {
                 console.log("error printing winners for remote game", err);
             });
         }, 10000);
-    } else if (message.type === "amount_of_players") {
+    } else if (message.type === "player_count_changed") {
         let ip = message.ip;
         let amount = message.amount;
         await lobby_server.rcon.send(`/interface mini_games.set_online_player_count(${amount}, "${ip}") `);
