@@ -156,6 +156,17 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
             print_winners(lua_array(event.results)).catch(print_error("calling print_winners for local game"));
         }, 20000);
     });
+
+    file_events.on("player_count_changed", function(server, event) {
+        let ip;
+        for (let [_ip, _server] of servers) {
+            if (_server === server) {
+                ip = _ip;
+            }
+        }
+        lobby_server.rcon.send(`/interface mini_games.set_online_player_count(${event.amount}, "${ip}") `)
+            .catch(print_error("during player_count_changed"));
+    });
     await airtable_init(base);
 
     //start the HTTPS/WebSocket server
@@ -317,6 +328,7 @@ async function update_lobby_server_list() {
     await lobby_server.rcon.send(`/interface
         global.servers = game.json_to_table('${JSON.stringify(server_data)}')
         global.running_servers = game.json_to_table('${JSON.stringify(running_servers)}')
+        mini_games.server_list_updated()
     `.replace(/\r?\n +/g, ' '));
 }
 
@@ -402,6 +414,10 @@ async function on_message(client_data, message) {
                 console.log("error printing winners for remote game", err);
             });
         }, 10000);
+    } else if (message.type === "player_count_changed") {
+        let ip = message.ip;
+        let amount = message.amount;
+        await lobby_server.rcon.send(`/interface mini_games.set_online_player_count(${amount}, "${ip}") `);
     }
 }
 
