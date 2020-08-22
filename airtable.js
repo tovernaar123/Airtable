@@ -99,6 +99,7 @@ exports.add_player = async function(base, player_name) {
                 "Roles": [
                     "Participant",
                 ],
+                "auto_signup": true,
             },
         },
     ]);
