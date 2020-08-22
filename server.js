@@ -345,8 +345,8 @@ wss.on("connection", function(ws, request) {
 
     socket_to_client_data.set(ws, client_data);
 
-    let intervalt = setInterval(() => {
-        ws.send(JSON.stringify({type: 'ping'}));
+    let ping_interval = setInterval(() => {
+        ws.ping()
     }, 5000);
 
     //Signal the connection has been established and send lobby ip
@@ -371,7 +371,7 @@ wss.on("connection", function(ws, request) {
     ws.on("close", function(code, reason) {
         console.log(`Connection from ${request.socket.remoteAddress} closed`);
         socket_to_client_data.delete(ws);
-        clearInterval(intervalt);
+        clearInterval(ping_interval);
         update_lobby_server_list().catch(err => {
             console.log("Error during ws close:", err);
         });
