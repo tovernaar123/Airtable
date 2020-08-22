@@ -11,6 +11,7 @@ const config = {
 
     //Server specific configs
     server_port: process.env.port,
+    server_bind_ip: process.env.bind_ip || "0.0.0.0",
     ws_secret: process.env.secret,
     tls_key_file: process.env.key,
     tls_cert_file: process.env.cert, //May also be specified on the client

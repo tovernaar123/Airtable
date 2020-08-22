@@ -172,6 +172,7 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
     //start the HTTPS/WebSocket server
     await start_server(
         config.server_port,
+        config.server_bind_ip,
         config.ws_secret,
         config.tls_key_file,
         config.tls_cert_file,
@@ -422,7 +423,7 @@ async function on_message(client_data, message) {
 }
 
 //Start https server
-async function start_server(port, secret, key_file, cert_file) {
+async function start_server(port, bind_ip, secret, key_file, cert_file) {
     //Load JWT secret
     secret = Buffer.from(secret, "base64");
 
@@ -447,7 +448,7 @@ async function start_server(port, secret, key_file, cert_file) {
     //Catch possible errors listening on port
     await new Promise((resolve, reject) => {
         server.on("error", reject);
-        server.listen(port, "0.0.0.0", () => {
+        server.listen(port, bind_ip, () => {
             server.off("error", reject);
             console.log(`listening on ${port}`);
             resolve();
