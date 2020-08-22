@@ -4,8 +4,10 @@ const https = require("https");
 const jwt = require("jsonwebtoken");
 const WebSocket = require("ws");
 
-//eslint-disable-next-line max-len
-const { stopped_game, started_game, add_player, init: airtable_init, airtable_events, player_roles} = require('./airtable.js');
+const {
+    stopped_game, started_game, add_player,
+    init: airtable_init, airtable_events, player_roles
+} = require('./airtable.js');
 const { lua_array, print_error } = require('./helpers.js');
 
 
