@@ -175,7 +175,8 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
         console.log(`adding player ${event.name} and deleting ${event.directory}`);
         add_player(base, event.name)
             .catch(print_error("during new_player"));
-        fs.unlink(event.directory);
+        fs.unlink(event.directory)
+            .catch(print_error("during new_player"));
     });
     //start the HTTPS/WebSocket server
     await start_server(
