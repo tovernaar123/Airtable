@@ -189,8 +189,6 @@ async function on_message(message) {
         } else {
             console.log(`Received start for unavailable server ${message.server}`);
         }
-    } else if (message.type === 'ping') {
-        websocket.send(JSON.stringify({type: 'pong'}));
     } else if (message.type === 'connected') {
         //Update main server's list of server
         send_server_list();
