@@ -30,8 +30,10 @@ exports.watch_files = function(servers) {
             timeout = true;
             setTimeout(() => {
                 timeout = false;
-                fs.promises.readFile(path.join(dir, filename)).then(content => {
+                let directory = path.join(dir, filename);
+                fs.promises.readFile(directory).then(content => {
                     let event = JSON.parse(content);
+                    event.directory = directory;
                     if (!file_events.emit(event.type, server, event)) {
                         console.log(`Warning: Unhandled file event ${event.type}`);
                         console.log(event);
