@@ -89,6 +89,22 @@ exports.stopped_game = async function(base, results, record_id) {
     console.log(await base('Scoring Data').update(record_id, fields));
 };
 
+exports.add_player = async function(base, player_name) {
+    let player_id = await get_player_id(base, player_name);
+    if (player_id !== null) { return; };
+    const id = await base('Player Data').create([
+        {
+            "fields": {
+                "Player Name": `${player_name}`,
+                "Roles": [
+                    "Participant",
+                ],
+            },
+        },
+    ]);
+    player_cache.set(player_name, id);
+};
+
 let players_roles = Object.create(null);
 let last_checked = '';
 const events = require('events');
