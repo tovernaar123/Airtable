@@ -159,8 +159,12 @@ function connect_websocket(url, token, cert) {
         options.servername = "";
     }
     let ws = new WebSocket(url, options);
+    let ping_interval;
     ws.on("open", function() {
-        //empty
+        console.log("WebSocket connection open");
+        ping_interval = setInterval(() => {
+            ws.ping();
+        }, 5000);
     });
     ws.on("message", function(message) {
         on_message(JSON.parse(message)).catch(print_error(`on_message(${message}) failed`));
@@ -170,6 +174,7 @@ function connect_websocket(url, token, cert) {
     });
     ws.on("close", function() {
         console.log("WebSocket connection lost, reconnecting in 10 seconds");
+        clearInterval(ping_interval);
         setTimeout(function() {
             connect_websocket(url, token, cert);
         }, 10000);
