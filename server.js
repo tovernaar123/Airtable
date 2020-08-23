@@ -6,7 +6,7 @@ const WebSocket = require("ws");
 
 const {
     stopped_game, started_game, add_player,
-    init: airtable_init, airtable_events, player_roles
+    init: airtable_init, airtable_events, player_roles,
 } = require('./airtable.js');
 const { lua_array, print_error } = require('./helpers.js');
 
