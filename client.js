@@ -12,99 +12,42 @@ let websocket;
 let lobby_ip;
 
 
-exports.init = async function(config, init_servers, base, file_events, rcon_events) {
+exports.init = async function(config, init_servers, server) {
     servers = init_servers;
 
-    for (let server of servers.values()) {
-        if (server.is_lobby === true) {
-            throw new Error('Client cannot have the lobby server');
-        }
+    if (!config.is_server) {
+        //Load tls certificate for websocket connection if it is configured
+        let cert = config.tls_cert_file ? await fs.readFile(config.tls_cert_file) : null;
+        connect_websocket(config.ws_url, config.ws_token, cert);
     }
+};
 
-    rcon_events.on("connect", function(ip, server) {
-        server_connected(ip, server).catch(print_error(`setting up rcon connection to ${ip}:`));
-    });
-
-    rcon_events.on("close", function(ip, server) {
-        server_disconnected(ip, server);
-        console.log(`lost rcon connection with ${ip}`);
-    });
-
-    file_events.on("started_game", function(server, event) {
-        console.log(event);
-        started_game(base, event.name, lua_array(event.players)).then(record_id => {
-            server.record_id = record_id;
-        }).catch(print_error("calling started_game"));
-    });
-
-    file_events.on("stopped_game", async function(server, event) {
-        server.game_running = null;
-        if (server.record_id) {
-            let record_id = server.record_id;
-            server.record_id = null;
-            await stopped_game(base, lua_array(event.results), record_id);
-
-        } else {
-            console.log(`Received stopped_game, but missing airtable record_id`);
-            console.log(JSON.stringify(event));
-        }
-        setTimeout(async function() {
-            await server.rcon.send("/lobby_all");
-        }, 10000);
-
-        //In 20 sec kick all players
-        setTimeout(async function() {
-            await server.rcon.send("/kick_all");
-        }, 20000);
-
-        websocket.send(JSON.stringify(event));
-        send_server_list();
-    });
-    file_events.on("start_cancelled", function(server, event) {
-        server.rcon.send('/sc game.print("Returning to lobby in 5 sec")').catch(console.error);
-        setTimeout(async function() {
-            await server.rcon.send("/lobby_all");
-        }, 5000);
-
-        //In 20 sec kick all players
-        setTimeout(async function() {
-            await server.rcon.send("/kick_all");
-        }, 15000);
-        server.game_running = null;
-        send_server_list();
-    });
-    file_events.on("player_count_changed", function(server, event) {
-        let ip;
-        for (let [_ip, _server] of servers) {
-            if (_server === server) {
-                ip = _ip;
-            }
-        }
-        //lobby_server.rcon.send(`/interface mini_games.set_online_player_count(${event.amount}, "${ip}") `);
-        websocket.send(JSON.stringify({ "type": "player_count_changed", "amount": event.amount, "ip": ip}));
-    });
-
-    //Load tls certificate for websocket connection if it is configured
-    let cert = config.tls_cert_file ? await fs.readFile(config.tls_cert_file) : null;
-    connect_websocket(config.ws_url, config.ws_token, cert);
+exports.connect_local_server = function connect_local_server(server_ws) {
+    websocket = server_ws;
 };
 
 //Handle rcon connection established with a Factorio server
-async function server_connected(ip, server) {
+exports.server_connected = async function server_connected(server) {
+    //telling the server if this the lobby
+    await server.rcon.send(`/set_lobby ${server.is_lobby}`);
+
+    //if the server is the lobby log it and continue as the lobby cant have games
     if (server.is_lobby) {
-        throw new Error("Client cannot have the lobby server");
+        console.log(`${server.ip} is the lobby. `);
+
+    } else {
+        //Set the ip of the lobby if available
+        if (lobby_ip !== undefined) {
+            await server.rcon.send(`/interface global.servers = {lobby = '${lobby_ip}'}`);
+        }
+
+        //Get all mini games the server can run
+        let result = await server.rcon.send(`/interface return game.table_to_json(mini_games.available)`);
+
+        //Remove the command complete line
+        result = result.split('\n')[0];
+        server.games = lua_array(JSON.parse(result));
     }
-
-    //Ensure the server knows it is not the lobby.
-    await server.rcon.send(`/set_lobby false`);
-
-    //Set the ip of the lobby if available
-    if (lobby_ip !== undefined) {
-        await server.rcon.send(`/interface global.servers = {lobby = '${lobby_ip}'}`);
-    }
-
-    //Get all mini games the server can run
-    let result = await server.rcon.send(`/interface return game.table_to_json(mini_games.available)`);
 
     if (Object.keys(player_roles).length !== 0) {
         await server.rcon.send(`/interface 
@@ -113,21 +56,24 @@ async function server_connected(ip, server) {
             )`.replace(/\r?\n +/g, ' ')
         );
     }
-    //Remove the command complete line
-    result = result.split('\n')[0];
-    server.games = lua_array(JSON.parse(result));
+
     server.online = true;
     send_server_list();
-}
+};
 
-function server_disconnected(ip, server) {
+exports.server_disconnected = function server_disconnected(server) {
     server.online = false;
     server.game_running = null;
     send_server_list();
+};
+
+function send(text) {
+    websocket.send(text);
 }
+exports.send = send;
 
 function send_server_list() {
-    if (websocket.readyState !== WebSocket.OPEN) {
+    if (websocket instanceof WebSocket && websocket.readyState !== WebSocket.OPEN) {
         //Not connected to the server yet
         return;
     }
@@ -142,8 +88,9 @@ function send_server_list() {
         }
     }
 
-    websocket.send(JSON.stringify({ "type": 'server_list', "servers": server_list }));
+    send(JSON.stringify({ "type": 'server_list', "servers": server_list }));
 }
+exports.send_server_list = send_server_list;
 
 
 //setup connection to the websocket interface of the server
@@ -203,7 +150,7 @@ async function on_message(message) {
 
         //loop over all the local server and set the lobby
         for (let connected_server of servers.values()) {
-            if (connected_server.rcon.authenticated) {
+            if (!connected_server.is_lobby && connected_server.rcon.authenticated) {
                 await connected_server.rcon.send(`/interface global.servers = {lobby = '${lobby_ip}'}`);
             }
         }
@@ -250,3 +197,4 @@ async function on_message(message) {
         console.log(`Unkown type ${data.type}`);
     }
 }
+exports.on_message = on_message;
