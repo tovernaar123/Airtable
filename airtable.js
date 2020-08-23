@@ -120,9 +120,9 @@ async function check_roles(base) {
         fields: ["Roles", "Player Name"],
         filterByFormula: `DATETIME_DIFF( LAST_MODIFIED_TIME(), '${last_checked}', 'milliseconds') >= 0`,
     }).eachPage(function page(records, fetchNextPage) {
-        console.log('checking roles');
         for (let record of records) {
             let player_name = record.get('Player Name');
+            if (player_name === undefined) { continue; }
             player_name = player_name.replace(/'/g, "\\'");
 
             let prev_roles = players_roles[player_name] || [];
