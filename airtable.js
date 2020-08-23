@@ -92,18 +92,14 @@ exports.stopped_game = async function(base, results, record_id) {
 exports.add_player = async function(base, player_name) {
     let player_id = await get_player_id(base, player_name);
     if (player_id !== null) { return; };
-    const id = await base('Player Data').create([
-        {
-            "fields": {
-                "Player Name": `${player_name}`,
-                "Roles": [
-                    "Participant",
-                ],
-                "Auto Signup": true,
-            },
-        },
-    ]);
-    player_cache.set(player_name, id);
+    const player_record = await base('Player Data').create({
+        "Player Name": `${player_name}`,
+        "Roles": [
+            "Participant",
+        ],
+        "Auto Signup": true,
+    });
+    player_cache.set(player_name, player_record.id);
 };
 
 let players_roles = Object.create(null);
