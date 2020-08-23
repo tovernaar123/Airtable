@@ -4,7 +4,10 @@ const https = require("https");
 const jwt = require("jsonwebtoken");
 const WebSocket = require("ws");
 
-const { stopped_game, started_game, init: airtable_init, airtable_events, player_roles} = require('./airtable.js');
+const {
+    stopped_game, started_game, add_player,
+    init: airtable_init, airtable_events, player_roles,
+} = require('./airtable.js');
 const { lua_array, print_error } = require('./helpers.js');
 
 
@@ -168,7 +171,13 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
             .catch(print_error("during player_count_changed"));
     });
     await airtable_init(base);
-
+    file_events.on("new_player", function(server, event) {
+        console.log(`adding player ${event.name} and deleting ${event.path_to_file}`);
+        add_player(base, event.name)
+            .catch(print_error("during new_player"));
+        fs.unlink(event.path_to_file)
+            .catch(print_error("during new_player"));
+    });
     //start the HTTPS/WebSocket server
     await start_server(
         config.server_port,
@@ -284,7 +293,6 @@ async function server_disconnected(ip, server) {
     airtable_events.removeListener('init', server.player_roles_init);
     airtable_events.removeListener('added_roles', server.added_roles);
     airtable_events.removeListener('removed_roles', server.removed_roles);
-    console.log(airtable_events);
     await update_lobby_server_list();
 }
 
