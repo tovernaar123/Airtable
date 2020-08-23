@@ -92,18 +92,14 @@ exports.stopped_game = async function(base, results, record_id) {
 exports.add_player = async function(base, player_name) {
     let player_id = await get_player_id(base, player_name);
     if (player_id !== null) { return; };
-    const id = await base('Player Data').create([
-        {
-            "fields": {
-                "Player Name": `${player_name}`,
-                "Roles": [
-                    "Participant",
-                ],
-                "Auto Signup": true,
-            },
-        },
-    ]);
-    player_cache.set(player_name, id);
+    const player_record = await base('Player Data').create({
+        "Player Name": `${player_name}`,
+        "Roles": [
+            "Participant",
+        ],
+        "Auto Signup": true,
+    });
+    player_cache.set(player_name, player_record.id);
 };
 
 let players_roles = Object.create(null);
@@ -124,9 +120,9 @@ async function check_roles(base) {
         fields: ["Roles", "Player Name"],
         filterByFormula: `DATETIME_DIFF( LAST_MODIFIED_TIME(), '${last_checked}', 'milliseconds') >= 0`,
     }).eachPage(function page(records, fetchNextPage) {
-        console.log('checking roles');
         for (let record of records) {
             let player_name = record.get('Player Name');
+            if (player_name === undefined) { continue; }
             player_name = player_name.replace(/'/g, "\\'");
 
             let prev_roles = players_roles[player_name] || [];
