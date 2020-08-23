@@ -148,6 +148,7 @@ exports.init = async function init(base) {
         function page(records, fetchNextPage) {
             for (let record of records) {
                 let player_name = record.get('Player Name');
+                if (player_name === undefined) { continue; }
                 player_name = player_name.replace(/'/g, "\\'");
                 let roles = record.get('Roles');
                 players_roles[player_name] = roles;

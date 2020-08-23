@@ -3,12 +3,9 @@ const WebSocket = require("ws");
 const fs = require("fs").promises;
 const { started_game, stopped_game } = require('./airtable.js');
 const { lua_array, print_error } = require('./helpers.js');
-const events = require('events');
 
 
 let player_roles = {};
-
-
 
 let servers;
 let websocket;
@@ -37,7 +34,7 @@ exports.init = async function(config, init_servers, base, file_events, rcon_even
         console.log(event);
         started_game(base, event.name, lua_array(event.players)).then(record_id => {
             server.record_id = record_id;
-        }).catch(print_err("calling started_game"));
+        }).catch(print_error("calling started_game"));
     });
 
     file_events.on("stopped_game", async function(server, event) {
@@ -109,6 +106,13 @@ async function server_connected(ip, server) {
     //Get all mini games the server can run
     let result = await server.rcon.send(`/interface return game.table_to_json(mini_games.available)`);
 
+    if (Object.keys(player_roles).length !== 0) {
+        await server.rcon.send(`/interface 
+            Roles.override_player_roles(
+                game.json_to_table('${JSON.stringify(player_roles)}')
+            )`.replace(/\r?\n +/g, ' ')
+        );
+    }
     //Remove the command complete line
     result = result.split('\n')[0];
     server.games = lua_array(JSON.parse(result));
@@ -155,8 +159,12 @@ function connect_websocket(url, token, cert) {
         options.servername = "";
     }
     let ws = new WebSocket(url, options);
+    let ping_interval;
     ws.on("open", function() {
-        //empty
+        console.log("WebSocket connection open");
+        ping_interval = setInterval(() => {
+            ws.ping();
+        }, 5000);
     });
     ws.on("message", function(message) {
         on_message(JSON.parse(message)).catch(print_error(`on_message(${message}) failed`));
@@ -166,6 +174,7 @@ function connect_websocket(url, token, cert) {
     });
     ws.on("close", function() {
         console.log("WebSocket connection lost, reconnecting in 10 seconds");
+        clearInterval(ping_interval);
         setTimeout(function() {
             connect_websocket(url, token, cert);
         }, 10000);
@@ -215,7 +224,7 @@ async function on_message(message) {
                 await server.rcon.send(`/interface
                     Roles.assign_player(
                         '${message.name}',
-                        game.json_to_table('${JSON.stringify(message.role)}'), 
+                        game.json_to_table('${JSON.stringify(message.roles)}'), 
                         nil, 
                         true, 
                         true
