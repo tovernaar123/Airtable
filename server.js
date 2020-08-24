@@ -66,7 +66,7 @@ exports.connect_local_client = function connect_local_client(client_ws, client_d
     }));
 };
 
-exports.find_socket_for_server_ip = function find_socket_for_server_ip(ip) {
+function find_socket_for_server_ip(ip) {
     for (let [client_ws, client_data] of socket_to_client_data) {
         if (client_data.servers[ip]) {
             return client_ws;
@@ -208,6 +208,18 @@ async function on_message(client_data, message) {
     if (message.type === "server_list") {
         client_data.servers = message.servers;
         await update_lobby_server_list();
+
+    } else if (message.type === "start_game") {
+        //Get the socket of the server
+        let client_ws = find_socket_for_server_ip(message.server);
+
+        //If the socket was found, send start game message to it
+        if (client_ws) {
+            client_ws.send(JSON.stringify(message));
+
+        } else {
+            console.log(`Error: Received start for unavailable server ${message.server}`);
+        }
 
     } else if (message.type === "stopped_game") {
         //If the game has ended print who has won in the lobby.
