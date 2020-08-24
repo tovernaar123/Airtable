@@ -22,21 +22,70 @@ const config = {
 };
 /*eslint-enable no-process-env*/
 
-const side = require(config.is_server ? "./server.js" : "./client.js");
-const file_listener = require('./file_listener.js');
-const rcon_connector = require('./rcon_connector.js');
+const server = require('./server.js');
+const client = require('./client.js');
 const Airtable = require('airtable');
+const { FactorioServer } = require('./factorio_server.js');
+const { set_base, init: airtable_init } = require('./airtable.js');
+const { print_error } = require('./helpers.js');
 
+set_base(new Airtable({ apiKey: config.airtable_token }).base(config.airtable_base));
+
+
+const servers = new Map();
+
+
+function setup_local_connection() {
+    let client_data = {
+        servers: {},
+    };
+
+    let client_ws = {
+        send: function(text) {
+            client.on_message(JSON.parse(text)).catch(
+                print_error("handling message from local server")
+            );
+        },
+    };
+
+    let server_ws = {
+        send: function(text) {
+            server.on_message(client_data, JSON.parse(text)).catch(
+                print_error("handling message from local client")
+            );
+        },
+    };
+
+    client.connect_local_server(server_ws);
+    server.connect_local_client(client_ws, client_data);
+}
 
 async function start() {
     const content = await fs.readFile(config.servers_file);
-    const servers = new Map(Object.entries(JSON.parse(content)));
-    const base = new Airtable({ apiKey: config.airtable_token }).base(config.airtable_base);
+    const server_configs = new Map(Object.entries(JSON.parse(content)));
 
-    const file_events = file_listener.watch_files(servers);
-    const rcon_events = rcon_connector.connect_to_servers(servers);
+    let lobby_servers = [];
+    for (let [ip, server_config] of server_configs) {
+        if (server_config.is_lobby) {
+            lobby_servers.push(ip);
+        }
+        servers.set(ip, new FactorioServer(ip, server_config));
+    }
 
-    await side.init(config, servers, base, file_events, rcon_events);
+    if (config.is_server && lobby_servers.length !== 1) {
+        throw new Error(`Excepted there to be exactly one lobby server but got ${lobby_servers.length}`);
+    } else if (!config.is_server && lobby_servers.length !== 0) {
+        throw new Error(`Remote client cannot have the lobby server`);
+    }
+    let lobby_server = servers.get(lobby_servers[0]);
+
+    await client.init(config, servers);
+
+    if (config.is_server) {
+        await server.init(config, lobby_server);
+        setup_local_connection();
+        await airtable_init();
+    }
 }
 
 if (require.main === module) {
