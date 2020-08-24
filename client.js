@@ -68,16 +68,14 @@ exports.server_disconnected = function server_disconnected(server) {
 };
 
 function send(text) {
-    websocket.send(text);
+    //Check if connected either to local or remote server
+    if (websocket && (!(websocket instanceof WebSocket) || websocket.readyState === WebSocket.OPEN)) {
+        websocket.send(text);
+    }
 }
 exports.send = send;
 
 function send_server_list() {
-    if (websocket instanceof WebSocket && websocket.readyState !== WebSocket.OPEN) {
-        //Not connected to the server yet
-        return;
-    }
-
     let server_list = {};
     for (let [ip, server] of servers) {
         if (server.online) {
