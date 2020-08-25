@@ -88,9 +88,11 @@ exports.stopped_game = async function(results, record_id) {
         records.push({ fields });
     }
 
-    //Create scores entries for the match
-    console.log(`Game ending with scores ${JSON.stringify(records)}`);
-    await base("Match Scores").create(records);
+    if (records.length) {
+        //Create scores entries for the match
+        console.log(`Game ending with scores ${JSON.stringify(records)}`);
+        await base("Match Scores").create(records);
+    }
 
     //Update Match end time
     await base('Matches').update(record_id, { "Time Ended": time_ended });
