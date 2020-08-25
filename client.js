@@ -183,7 +183,7 @@ async function on_message(message) {
                 await server.rcon.send(`/interface
                     Roles.unassign_player(
                         '${message.name}',
-                        game.json_to_table('${JSON.stringify(message.role)}'), 
+                        game.json_to_table('${JSON.stringify(message.roles)}'), 
                         nil, 
                         true, 
                         true
