@@ -47,10 +47,11 @@ async function get_game_id(name) {
 };
 
 //Create match record in Matches table.
-exports.started_game = async function(name, players) {
+exports.started_game = async function(name, players, variant) {
     let fields = {};
     fields["Players Present"] = [];
     fields["Time Started"] = new Date().toISOString();
+    if (variant) { fields["Variant"] = variant; }
     let game_id = await get_game_id(name);
     if (game_id !== null) {
         fields["Game"] = [game_id];
