@@ -1,4 +1,6 @@
 "use strict";
+const fs = require('fs').promises;
+
 const client = require('./client.js');
 const file_listener = require('./file_listener.js');
 const rcon_connector = require('./rcon_connector.js');

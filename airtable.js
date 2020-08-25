@@ -46,7 +46,7 @@ async function get_game_id(name) {
     return id;
 };
 
-//Create match record in Scoring Data table.
+//Create match record in Matches table.
 exports.started_game = async function(name, players) {
     let fields = {};
     fields["Players Present"] = [];
@@ -64,31 +64,36 @@ exports.started_game = async function(name, players) {
         }
     }
     console.log(`game starting with this ${JSON.stringify(fields)} as the fields. `);
-    const created = await base('Scoring Data').create(fields);
+    const created = await base('Matches').create(fields);
     console.log(created);
     return created.id;
 };
 
-//Update match record in Scoring Data table with pole positions.
+//Update match records in Matches and Match Scares tables with pole positions.
 exports.stopped_game = async function(results, record_id) {
-    let fields = {};
+    let time_ended = new Date().toISOString();
+    let records = [];
 
-    let place_to_field = [null, "Gold", "Silver", "Bronze"];
     for (let entry of results) {
-        //Placement above 3rd place is not stored in the airtable.
-        if (entry.place > 3) {
-            continue;
-        }
+        let fields = {};
         let player_ids = await Promise.all(
             lua_array(entry.players).map(player => get_player_id(player))
         );
-        fields[`${place_to_field[entry.place]} Player`] = player_ids.filter((id) => id !== null);
-        fields[`${place_to_field[entry.place]} Data`] = entry.score;
+
+        fields["Match"] = [record_id];
+        fields["Players"] = player_ids.filter((id) => id !== null);
+        if (entry.place) { fields["Place"] = entry.place; }
+        if (entry.score) { fields["Score"] = entry.score; }
+        if (entry.extra) { fields["Extra"] = JSON.stringify(entry.extra); }
+        records.push({ fields });
     }
 
-    fields["Time Ended"] = new Date().toISOString();
-    console.log(`game ending with this ${JSON.stringify(fields)} as the fields. `);
-    console.log(await base('Scoring Data').update(record_id, fields));
+    //Create scores entries for the match
+    console.log(`Game ending with scores ${JSON.stringify(records)}`);
+    await base("Match Scores").create(records);
+
+    //Update Match end time
+    await base('Matches').update(record_id, { "Time Ended": time_ended });
 };
 
 exports.add_player = async function(player_name) {
