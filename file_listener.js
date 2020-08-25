@@ -31,8 +31,10 @@ exports.watch_files = function(server) {
             timeout = false;
             let path_to_file = path.join(dir, filename);
             fs.promises.readFile(path_to_file).then(content => {
+                //Remove the file in the background, the 3Ra web panel causes them to keep triggering
+                fs.promises.unlink(event.path_to_file).catch(print_error("removing file from file_event");
+
                 let event = JSON.parse(content);
-                event.path_to_file = path_to_file;
                 return server.file_event(event).catch(
                     print_error(`during file event ${event.type}`)
                 );

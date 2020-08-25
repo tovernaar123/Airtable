@@ -1,6 +1,4 @@
 "use strict";
-const fs = require('fs').promises;
-
 const client = require('./client.js');
 const file_listener = require('./file_listener.js');
 const rcon_connector = require('./rcon_connector.js');
@@ -96,9 +94,8 @@ class FactorioServer {
             client.send(JSON.stringify({ "type": "player_count_changed", "amount": event.amount, "ip": this.ip}));
 
         } else if (event.type === "new_player") {
-            console.log(`adding player ${event.name} and deleting ${event.path_to_file}`);
+            console.log(`adding player ${event.name}`);
             await add_player(event.name);
-            await fs.unlink(event.path_to_file);
 
         } else {
             console.log(`unknown file_event ${event.type}`);
