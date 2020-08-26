@@ -47,18 +47,19 @@ async function get_game_id(name) {
 };
 
 //Create match record in Matches table.
-exports.started_game = async function(name, players, variant) {
+exports.started_game = async function(event) {
     let fields = {};
     fields["Players Present"] = [];
     fields["Time Started"] = new Date().toISOString();
-    if (variant) { fields["Variant"] = variant; }
-    let game_id = await get_game_id(name);
+    if (event.variant) { fields["Variant"] = event.variant; }
+    if (event.extra) { fields["Extra"] = JSON.stringify(event.extra); }
+    let game_id = await get_game_id(event.name);
     if (game_id !== null) {
         fields["Game"] = [game_id];
     } else {
-        console.log(`Warning: Got started_game for nonexistent game ${name}`);
+        console.log(`Warning: Got started_game for nonexistent game ${event.name}`);
     }
-    for (let player of players) {
+    for (let player of lua_array(event.players)) {
         let player_id = await get_player_id(player);
         if (player_id) {
             fields["Players Present"].push(player_id);

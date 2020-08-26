@@ -37,7 +37,7 @@ class FactorioServer {
     async file_event(event) {
         if (event.type === "started_game") {
             console.log(event);
-            let record_id = await started_game(event.name, lua_array(event.players), event.variant);
+            let record_id = await started_game(event);
             this.record_id = record_id;
 
         } else if (event.type === "start_cancelled") {
