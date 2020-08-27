@@ -186,6 +186,35 @@ exports.init = async function init() {
             console.error(err);
         });
     }, 10000);
+    pages = await base('game schedule').select();
 
+    let games = [];
+    let utc_time = new Date();
+    await pages.eachPage(
+        function page(records, fetchNextPage) {
+            for (let record of records) {
+                let this_game = {};
+                let date = record.get('date');
+                if (date === undefined) { continue; }
+                let diff = Date.parse(date) - utc_time;
+                if (diff < 0) { continue; }
+                this_game.date = date;
+                let game = record.get('game') || "Race_game";
+                this_game.game = game;
+                let amount_of_games = record.get('amount of games') || "1";
+                this_game.amount_of_games = Number(amount_of_games);
+                let required_players = record.get('required players') || "4";
+                this_game.required_players = Number(required_players);
+                games.push(this_game);
+            };
+            fetchNextPage();
+        });
+    games.sort(function(a, b) {
+        return a.date - b.date;
+    });
+    if (game !== undefined) {
+        airtable_events.emit("recieved_game_schedule", games);
+    }
+    console.log(`${JSON.stringify(games)}`);
     return airtable_events;
 };
