@@ -1,0 +1,6 @@
+{
+"Race_game" : [ 
+    "mini_games.start_game('Race_game', #Roles.get_role_by_name('Participant'):get_players(true), {'nuclear-fuel', 1, 1})",
+    "mini_games.start_game('Race_game', #Roles.get_role_by_name('Participant'):get_players(true), {'nuclear-fuel', 2, 1})"
+]
+}

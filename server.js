@@ -3,14 +3,14 @@ const fs = require("fs").promises;
 const https = require("https");
 const jwt = require("jsonwebtoken");
 const WebSocket = require("ws");
-
+let config;
 const { airtable_events, player_roles } = require('./airtable.js');
 const { lua_array, print_error } = require('./helpers.js');
-
 
 let socket_to_client_data = new Map();
 let lobby_server;
 let airtable_init_done = false;
+
 airtable_events.on('init', (roles) => {
     for (let [ws, value] of socket_to_client_data.entries()) {
         ws.send(JSON.stringify({
@@ -41,10 +41,25 @@ airtable_events.on('removed_roles', (roles, name) => {
     }
 });
 
-exports.init = async function init(config, init_lobby_server) {
+let game_schedule = [];
+
+airtable_events.once('recieved_game_schedule', (games) => {
+    game_schedule = games;
+    let utc_time = new Date();
+    let timeout = game_schedule[0].date - utc_time;
+    if (timeout < 0) { timeout = 0; };
+    setTimeout(() => {
+        let amount_of_games = game_schedule[0].amount_of_games;
+        let required_players = game_schedule[0].required_players;
+        let game = game_schedule[0].game;
+        start_new_game(amount_of_games, required_players, game);
+    }, timeout);
+}, 1000);
+
+exports.init = async function init(_config, init_lobby_server) {
     console.log("running as server");
     lobby_server = init_lobby_server;
-
+    config = _config;
     //Find the lobby server among the local servers.
     //start the HTTPS/WebSocket server
     await start_server(
@@ -199,6 +214,85 @@ function authenticate(request, secret) {
     return true;
 }
 
+function getRandomInt(max) {
+    return Math.floor(Math.random() * Math.floor(max));
+}
+
+let _amount_of_games;
+let _required_players;
+let _game;
+async function start_new_game(amount_of_games, required_players, game) {
+    if (amount_of_games <= 0) { return; }
+    _amount_of_games = amount_of_games;
+    _required_players = required_players;
+    _game = game;
+    let game_array = config.auto_games[game];
+    let online_players = await lobby_server.rcon.send(`/interface 
+        return #Roles.get_role_by_name('Participant'):get_players(true)`.replace(/\r?\n +/g, ' '));
+    online_players = online_players.replace(/\r?\n +/g, '');
+    online_players = online_players.replace('Command Complete', '');
+    if (Number(online_players) >= required_players) {
+        let command = game_array[getRandomInt(game_array.length)];
+        setTimeout(() => {
+            lobby_server.rcon.send(`/interface ${command}`)
+                .then(() => {
+                    amount_of_games = amount_of_games - 1;
+                    _amount_of_games = amount_of_games;
+                    if (amount_of_games === 0) {
+                        if (game_schedule.length <= 0) {
+                            return;
+                        }
+                        game_schedule.shift();
+                        let utc_time = new Date();
+                        let timeout = game_schedule[0].date - utc_time;
+                        if (timeout < 0) { timeout = 0; };
+                        setTimeout(() => {
+                            amount_of_games = game_schedule[0].amount_of_games;
+                            required_players = game_schedule[0].required_players;
+                            game = game_schedule[0].game;
+                            start_new_game(amount_of_games, required_players, game);
+                        }, timeout);
+                    }
+                })
+                .catch(print_error('called in start_new_game'));
+        }, 25000);
+    } else {
+        let Intervalt = setInterval(() => {
+            lobby_server.rcon.send(`/interface 
+                return #Roles.get_role_by_name('Participant'):get_players(true)`.replace(/\r?\n +/g, ' '))
+                .then((online_count) => {
+                    online_count = online_count.replace(/\r?\n +/g, '');
+                    online_count = online_count.replace('Command Complete', '');
+                    if (Number(online_count) >= required_players) {
+                        clearInterval(Intervalt);
+                        let command = game_array[getRandomInt(game_array.length)];
+                        lobby_server.rcon.send(`/interface ${command}`)
+                            .then(() => {
+                                amount_of_games = amount_of_games - 1;
+                                _amount_of_games = amount_of_games;
+                                if (amount_of_games === 0) {
+                                    if (game_schedule.length <= 0) {
+                                        return;
+                                    }
+                                    game_schedule.shift();
+                                    let utc_time = new Date();
+                                    let timeout = game_schedule[0].date - utc_time;
+                                    if (timeout < 0) { timeout = 0; };
+                                    setTimeout(() => {
+                                        amount_of_games = game_schedule[0].amount_of_games;
+                                        required_players = game_schedule[0].required_players;
+                                        game = game_schedule[0].game;
+                                        start_new_game(amount_of_games, required_players, game);
+                                    }, timeout);
+                                }
+                            })
+                            .catch(print_error('called in start_new_game'));
+                    }
+                });
+        }, 5000);
+    }
+}
+
 
 //Invoked when a message is received from a client
 async function on_message(client_data, message) {
@@ -229,6 +323,8 @@ async function on_message(client_data, message) {
                 console.log("error printing winners for remote game", err);
             });
         }, 10000);
+        start_new_game(_amount_of_games, _required_players, _game)
+            .catch(print_error('when trying to start a new game'));
     } else if (message.type === "player_count_changed") {
         let ip = message.ip;
         let amount = message.amount;

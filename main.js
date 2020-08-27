@@ -15,6 +15,7 @@ const config = {
     ws_secret: process.env.secret,
     tls_key_file: process.env.key,
     tls_cert_file: process.env.cert, //May also be specified on the client
+    auto_games_file: process.env.auto_games,
 
     //Client specific configs
     ws_token: process.env.token,
@@ -62,6 +63,14 @@ function setup_local_connection() {
 
 async function start() {
     const content = await fs.readFile(config.servers_file);
+    let auto_games;
+    if (config.auto_games_file) {
+        auto_games = await fs.readFile(config.auto_games_file);
+        auto_games = JSON.parse(auto_games);
+        console.log(`${auto_games}`);
+        config.auto_games = auto_games;
+        delete config.auto_games_file;
+    }
     const server_configs = new Map(Object.entries(JSON.parse(content)));
 
     let lobby_servers = [];
