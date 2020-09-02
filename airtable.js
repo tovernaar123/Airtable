@@ -84,8 +84,8 @@ exports.stopped_game = async function(results, record_id) {
 
         fields["Match"] = [record_id];
         fields["Players"] = player_ids.filter((id) => id !== null);
-        if (entry.place) { fields["Place"] = entry.place; }
-        if (entry.score) { fields["Score"] = entry.score; }
+        if (typeof entry.place === "number") { fields["Place"] = entry.place; }
+        if (typeof entry.score === "number") { fields["Score"] = entry.score; }
         if (entry.extra) { fields["Extra"] = JSON.stringify(entry.extra); }
         records.push({ fields });
     }

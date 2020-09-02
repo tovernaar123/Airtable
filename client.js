@@ -133,7 +133,15 @@ async function on_message(message) {
     if (message.type === 'start_game') {
         let server = servers.get(message.server);
         if (server && server.rcon.authenticated) {
-            await server.rcon.send(`/start "${message.name}" ${message.player_count} ${message.args.join(' ')}`);
+            let args = "";
+            for (let arg of message.args) {
+                if (/ /.test(arg)) {
+                    args += ` "${arg}"`;
+                } else {
+                    args += ` ${arg}`
+                }
+            }
+            await server.rcon.send(`/start "${message.name}" ${message.player_count}${args}`);
             server.game_running = message.name;
             send_server_list();
         } else {
