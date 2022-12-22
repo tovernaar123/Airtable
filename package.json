@@ -6,7 +6,7 @@
   "dependencies": {
     "airtable": "^0.8.1",
     "dotenv": "^8.2.0",
-    "jsonwebtoken": "^8.5.1",
+    "jsonwebtoken": "^9.0.0",
     "rcon-client": "^4.2.0",
     "ws": "^7.3.1"
   },
